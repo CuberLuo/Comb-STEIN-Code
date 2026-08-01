@@ -1,6 +1,11 @@
 if (!requireNamespace("Iso", quietly = TRUE)) {
   stop("Package 'Iso' is required. Install it with install.packages('Iso').")
 }
+if (!requireNamespace("rjags", quietly = TRUE)) {
+  stop(
+    "Package 'rjags' is required. Install JAGS first, then install.packages('rjags')."
+  )
+}
 
 DEFAULT_SEED <- 2026
 
@@ -19,6 +24,12 @@ RUNIN_COHORTS <- 4
 EFF_STOP_N <- 6
 EFF_STOP_CUT <- 0.7
 EFF_STOP_PROB <- 0.9
+
+## Bayesian quadratic-logistic efficacy model (Cai, Yuan, and Ji, 2014).
+EFF_MCMC_BURNIN <- 1000L
+EFF_MCMC_SAMPLES <- 2000L
+EFF_MCMC_CHAINS <- 2L
+EFF_MCMC_THIN <- 1L
 
 calc.phi <- function(phi0, phi1) {
   log((1 - phi0) / (1 - phi1)) /

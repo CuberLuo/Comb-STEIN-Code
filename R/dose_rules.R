@@ -75,7 +75,7 @@ final.selection <- function(x_mat, y_mat, n_mat, admissible) {
   if (!any(eligible)) return(c(NA_integer_, NA_integer_))
 
   phat <- (x_mat + 0.05) / (n_mat + 0.1)
-  p_star <- Iso::biviso(phat)
+  p_star <- Iso::biviso(phat, w = n_mat + 0.1)
   q_star <- eff.estimate(y_mat, n_mat)
   utility <- utility.fn(p_star, q_star, w1, w2, phi)
   utility[!eligible] <- -Inf
