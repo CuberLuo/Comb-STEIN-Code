@@ -12,10 +12,13 @@ pr.eff.gt <- function(y, n, cut) {
   1 - pbeta(cut, y + 1, n - y + 1)
 }
 
-monitor.flags <- function(x_mat, y_mat, n_mat) {
-  observed <- n_mat > 0
-  overtox <- observed & (pr.overtox(x_mat, n_mat, phi) > Tthresh)
-  ineff <- observed & (pr.ineff(y_mat, n_mat, psi1) > Ethresh)
+monitor.flags <- function(x_mat, y_mat, n_tox, n_eff = n_tox) {
+  observed_tox <- n_tox > 0
+  observed_eff <- n_eff > 0
+  overtox <- observed_tox &
+    (pr.overtox(x_mat, n_tox, phi) > Tthresh)
+  ineff <- observed_eff &
+    (pr.ineff(y_mat, n_eff, psi1) > Ethresh)
   list(overtox = overtox, ineff = ineff)
 }
 
@@ -27,17 +30,21 @@ get.true.obdc <- function(pT, pE) {
   )
 }
 
-update.admissible <- function(x_mat, y_mat, n_mat, admissible) {
-  I <- nrow(n_mat)
-  J <- ncol(n_mat)
-  flags <- monitor.flags(x_mat, y_mat, n_mat)
+update.admissible <- function(
+  x_mat,
+  y_mat,
+  n_tox,
+  admissible,
+  n_eff = n_tox
+) {
+  I <- nrow(n_tox)
+  J <- ncol(n_tox)
+  flags <- monitor.flags(x_mat, y_mat, n_tox, n_eff)
 
   for (i in seq_len(I)) {
     for (j in seq_len(J)) {
-      if (n_mat[i, j] > 0) {
-        if (flags$overtox[i, j]) admissible[i:I, j:J] <- FALSE
-        if (flags$ineff[i, j]) admissible[i, j] <- FALSE
-      }
+      if (flags$overtox[i, j]) admissible[i:I, j:J] <- FALSE
+      if (flags$ineff[i, j]) admissible[i, j] <- FALSE
     }
   }
   admissible

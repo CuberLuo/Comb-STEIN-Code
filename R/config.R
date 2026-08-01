@@ -8,6 +8,21 @@ if (!requireNamespace("rjags", quietly = TRUE)) {
 }
 
 DEFAULT_SEED <- 2026
+DEFAULT_NTRIAL <- 50L
+
+## Time-to-event settings used by TITE-STEIN (Sun et al., 2025).
+## Times are expressed in days.  Delayed outcomes are opt-in so the original
+## complete-outcome simulation remains the default.
+DEFAULT_DELAY_CONTROL <- list(
+  accrual = 10,
+  tox_window = 30,
+  eff_window = 90,
+  suspension = 0.5,
+  use_suspension = TRUE,
+  accrual_random = FALSE,
+  tox_distribution = "uniform",
+  eff_distribution = "uniform"
+)
 
 ## Design parameters (Section 3 of the manuscript)
 phi0 <- 0.3

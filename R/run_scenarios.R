@@ -2,10 +2,17 @@
 
 run.scenario <- function(
   name,
-  ntrial = 1000,
-  obdc.definition = c("utility", "table1")
+  ntrial = DEFAULT_NTRIAL,
+  obdc.definition = c("utility", "table1"),
+  delayed = FALSE,
+  delay.control = NULL
 ) {
   obdc.definition <- match.arg(obdc.definition)
+  if (length(delayed) != 1L || is.na(delayed)) {
+    stop("delayed must be TRUE or FALSE")
+  }
+  delayed <- isTRUE(delayed)
+  if (delayed) delay.control <- normalize.delay.control(delay.control)
   if (!name %in% names(scenarios)) stop("Unknown scenario: ", name)
   if (
     length(ntrial) != 1L ||
@@ -35,12 +42,14 @@ run.scenario <- function(
   out <- data.frame(
     Scenario = name,
     Method = methods,
+    Delay = if (delayed) "TITE" else "Complete",
     Selection = NA,
     Patient = NA,
     Sample = NA,
     DLTs = NA,
     Tox = NA,
-    Eff = NA
+    Eff = NA,
+    Duration = NA
   )
 
   for (method in methods) {
@@ -50,24 +59,25 @@ run.scenario <- function(
     dlt.sum <- 0
     toxicity.stop.count <- 0
     efficacy.stop.count <- 0
+    duration.sum <- 0
 
     for (trial in seq_len(ntrial)) {
       result <- switch(
         method,
         "Comb-STEIN-L" = simulate.trial.stein(
-          pT, pE, "CombSTEIN-L"
+          pT, pE, "CombSTEIN-L", delayed, delay.control
         ),
         "Comb-STEIN-H" = simulate.trial.stein(
-          pT, pE, "CombSTEIN-H"
+          pT, pE, "CombSTEIN-H", delayed, delay.control
         ),
         "Runin-STEIN" = simulate.trial.stein(
-          pT, pE, "RunIn-STEIN"
+          pT, pE, "RunIn-STEIN", delayed, delay.control
         ),
         "Waterfall-L" = simulate.trial.waterfall(
-          pT, pE, "Waterfall-L"
+          pT, pE, "Waterfall-L", delayed, delay.control
         ),
         "Waterfall-H" = simulate.trial.waterfall(
-          pT, pE, "Waterfall-H"
+          pT, pE, "Waterfall-H", delayed, delay.control
         )
       )
 
@@ -80,6 +90,7 @@ run.scenario <- function(
       if (result$earlystop_eff) {
         efficacy.stop.count <- efficacy.stop.count + 1
       }
+      if (delayed) duration.sum <- duration.sum + result$duration
 
       if (!any(is.na(result$sel))) {
         correct <- any(apply(
@@ -104,9 +115,14 @@ run.scenario <- function(
     out[row, "DLTs"] <- round(dlt.sum / ntrial, 1)
     out[row, "Tox"] <- round(100 * toxicity.stop.count / ntrial, 1)
     out[row, "Eff"] <- round(100 * efficacy.stop.count / ntrial, 1)
+    if (delayed) {
+      out[row, "Duration"] <- round(duration.sum / ntrial, 1)
+    }
   }
 
   attr(out, "true.obdcs") <- true.ij
   attr(out, "obdc.definition") <- obdc.definition
+  attr(out, "delayed") <- delayed
+  if (delayed) attr(out, "delay.control") <- delay.control
   out
 }
