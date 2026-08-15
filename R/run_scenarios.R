@@ -1,5 +1,8 @@
 ## Repeated-trial simulation and summary aggregation.
 
+## Simulate every design method repeatedly under one named scenario.
+## Returns a method-level operating-characteristic table and stores the true
+## OBDC definition and delay settings as attributes.
 run.scenario <- function(
   name,
   ntrial = DEFAULT_NTRIAL,
@@ -62,23 +65,37 @@ run.scenario <- function(
     duration.sum <- 0
 
     for (trial in seq_len(ntrial)) {
-      result <- switch(
-        method,
-        "Comb-STEIN-L" = simulate.trial.stein(
-          pT, pE, "CombSTEIN-L", delayed, delay.control
+      result <- tryCatch(
+        switch(
+          method,
+          "Comb-STEIN-L" = simulate.trial.stein(
+            pT, pE, "CombSTEIN-L", delayed, delay.control
+          ),
+          "Comb-STEIN-H" = simulate.trial.stein(
+            pT, pE, "CombSTEIN-H", delayed, delay.control
+          ),
+          "Runin-STEIN" = simulate.trial.stein(
+            pT, pE, "RunIn-STEIN", delayed, delay.control
+          ),
+          "Waterfall-L" = simulate.trial.waterfall(
+            pT, pE, "Waterfall-L", delayed, delay.control
+          ),
+          "Waterfall-H" = simulate.trial.waterfall(
+            pT, pE, "Waterfall-H", delayed, delay.control
+          )
         ),
-        "Comb-STEIN-H" = simulate.trial.stein(
-          pT, pE, "CombSTEIN-H", delayed, delay.control
-        ),
-        "Runin-STEIN" = simulate.trial.stein(
-          pT, pE, "RunIn-STEIN", delayed, delay.control
-        ),
-        "Waterfall-L" = simulate.trial.waterfall(
-          pT, pE, "Waterfall-L", delayed, delay.control
-        ),
-        "Waterfall-H" = simulate.trial.waterfall(
-          pT, pE, "Waterfall-H", delayed, delay.control
-        )
+        error = function(err) {
+          stop(
+            sprintf(
+              "Scenario %s, method %s, trial %d failed: %s",
+              name,
+              method,
+              trial,
+              conditionMessage(err)
+            ),
+            call. = FALSE
+          )
+        }
       )
 
       total.n <- sum(result$n)

@@ -14,12 +14,15 @@
 
 .efficacy_fit_cache <- new.env(parent = emptyenv())
 
+## Standardize ordered dose levels to mean zero and standard deviation 0.5.
+## A single-level agent receives the neutral score zero.
 .standardize.dose.scores <- function(n.levels) {
   scores <- seq_len(n.levels)
   if (n.levels == 1L) return(0)
   (scores - mean(scores)) / (2 * stats::sd(scores))
 }
 
+## Serialize efficacy counts and MCMC settings into a deterministic cache key.
 .efficacy.cache.key <- function(
   y_mat,
   n_mat,
@@ -41,6 +44,7 @@
   )
 }
 
+## Derive a reproducible, positive JAGS seed from the observed count matrices.
 .efficacy.jags.seed <- function(y_mat, n_mat) {
   values <- c(
     nrow(y_mat),
@@ -53,6 +57,9 @@
   as.integer((sum(weighted) %% 2147483646) + 1)
 }
 
+## Estimate efficacy probabilities with the hierarchical quadratic-logistic
+## JAGS model.  Inputs are efficacy and sample-size matrices with matching
+## dimensions; the return value is a posterior-mean probability matrix.
 eff.estimate <- function(
   y_mat,
   n_mat,
@@ -167,27 +174,41 @@ eff.estimate <- function(
   )
 
   draws.per.chain <- ceiling(n_samples / n_chains)
-  samples <- rjags::coda.samples(
+  ## Read the monitored array directly from rjags.  Converting a long sequence
+  ## of fits through coda::as.matrix() can occasionally retain an expression
+  ## object as row names and make base::as.data.frame() fail.  The raw mcarray
+  ## has dimensions q-cell x iteration x chain and does not need row names.
+  samples <- rjags::jags.samples(
     model,
     variable.names = "q",
     n.iter = draws.per.chain * thin,
     thin = thin,
+    type = "trace",
     progress.bar = "none"
   )
-  draws <- as.matrix(samples)
-  if (nrow(draws) > n_samples) {
-    draws <- draws[seq_len(n_samples), , drop = FALSE]
+  q.samples <- samples[["q"]]
+  expected.cells <- length(y_mat)
+  if (
+    is.null(q.samples) ||
+      length(dim(q.samples)) != 3L ||
+      dim(q.samples)[1] != expected.cells
+  ) {
+    stop("JAGS output has unexpected dimensions for efficacy probabilities.")
   }
-  q.columns <- match(
-    paste0("q[", seq_len(length(y_mat)), "]"),
-    colnames(draws)
+  q.draws <- matrix(
+    as.numeric(q.samples),
+    nrow = expected.cells,
+    dimnames = NULL
   )
-  if (anyNA(q.columns)) {
-    stop("JAGS output is missing one or more efficacy probabilities.")
+  if (ncol(q.draws) > n_samples) {
+    q.draws <- q.draws[, seq_len(n_samples), drop = FALSE]
+  }
+  if (ncol(q.draws) < n_samples) {
+    stop("JAGS returned fewer efficacy draws than requested.")
   }
 
   q.final <- matrix(
-    colMeans(draws[, q.columns, drop = FALSE]),
+    rowMeans(q.draws),
     nrow = I,
     ncol = J
   )
@@ -198,6 +219,8 @@ eff.estimate <- function(
   q.final
 }
 
+## Calculate the design utility from toxicity (`p`) and efficacy (`q`).
+## Toxicity above `phi` receives the additional penalty weighted by `w2`.
 utility.fn <- function(p, q, w1, w2, phi) {
   q - w1 * p - w2 * p * (p > phi)
 }

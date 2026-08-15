@@ -1,17 +1,25 @@
 ## Posterior monitoring, admissibility updates, and dose-selection rules.
 
+## Compute Pr(toxicity probability > `cut`) under a Beta(1, 1) prior.
+## `x` and `n` may be scalars, vectors, or conformable matrices.
 pr.overtox <- function(x, n, cut) {
   1 - pbeta(cut, x + 1, n - x + 1)
 }
 
+## Compute Pr(efficacy probability < `cut`) under a Beta(1, 1) prior.
+## `y` and `n` may be scalars, vectors, or conformable matrices.
 pr.ineff <- function(y, n, cut) {
   pbeta(cut, y + 1, n - y + 1)
 }
 
+## Compute Pr(efficacy probability > `cut`) under a Beta(1, 1) prior.
+## `y` and `n` may be scalars, vectors, or conformable matrices.
 pr.eff.gt <- function(y, n, cut) {
   1 - pbeta(cut, y + 1, n - y + 1)
 }
 
+## Flag observed dose combinations that cross toxicity or futility thresholds.
+## Returns logical matrices named `overtox` and `ineff`.
 monitor.flags <- function(x_mat, y_mat, n_tox, n_eff = n_tox) {
   observed_tox <- n_tox > 0
   observed_eff <- n_eff > 0
@@ -22,6 +30,8 @@ monitor.flags <- function(x_mat, y_mat, n_tox, n_eff = n_tox) {
   list(overtox = overtox, ineff = ineff)
 }
 
+## Identify all true optimal biological dose combinations by maximum utility.
+## Returns a two-column matrix of row and column indices, including exact ties.
 get.true.obdc <- function(pT, pE) {
   utility <- utility.fn(pT, pE, w1, w2, phi)
   which(
@@ -30,6 +40,9 @@ get.true.obdc <- function(pT, pE) {
   )
 }
 
+## Apply posterior safety and futility rules to the admissibility matrix.
+## An overtoxic cell also eliminates combinations northeast of that cell;
+## an inefficacious cell eliminates only itself.
 update.admissible <- function(
   x_mat,
   y_mat,
@@ -50,6 +63,8 @@ update.admissible <- function(
   admissible
 }
 
+## Build the local candidate set for the next dose-combination assignment.
+## Escalation is excluded when the current observed toxicity rate exceeds phi.
 alt.set.C <- function(i, j, I, J, p_ij_hat) {
   candidates <- list()
   if (p_ij_hat > phi) {
@@ -65,6 +80,8 @@ alt.set.C <- function(i, j, I, J, p_ij_hat) {
   candidates
 }
 
+## Select the candidate with the largest posterior probability of efficacy.
+## A deterministic dose-index term breaks otherwise equal posterior scores.
 pick.best.by.eff <- function(cand_list, y_mat, n_mat) {
   posterior <- sapply(cand_list, function(ij) {
     score <- pr.eff.gt(
@@ -77,6 +94,8 @@ pick.best.by.eff <- function(cand_list, y_mat, n_mat) {
   cand_list[[which.max(posterior)]]
 }
 
+## Select the final treated, admissible combination with maximum fitted utility.
+## Returns c(row, column), or two NA integers when no combination is eligible.
 final.selection <- function(x_mat, y_mat, n_mat, admissible) {
   eligible <- admissible & n_mat > 0
   if (!any(eligible)) return(c(NA_integer_, NA_integer_))
@@ -94,6 +113,8 @@ final.selection <- function(x_mat, y_mat, n_mat, admissible) {
   selected[1, ]
 }
 
+## Construct the alternating row/column escalation path used during run-in.
+## The returned list contains at most `ncohort` integer index pairs.
 make.runin.path <- function(I, J, ncohort = RUNIN_COHORTS) {
   path <- list(c(1L, 1L))
   current <- c(1L, 1L)

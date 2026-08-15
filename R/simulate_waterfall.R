@@ -1,5 +1,8 @@
 ## Simplified row-by-row waterfall comparator.
 
+## Simulate one row-wise Waterfall trial with complete or delayed outcomes.
+## Returns allocation counts, outcomes, the selected combination, stopping
+## indicators, and (for delayed data) trial duration.
 simulate.trial.waterfall <- function(
   pT,
   pE,
@@ -123,6 +126,8 @@ simulate.trial.waterfall <- function(
   )
 }
 
+## Run the time-to-event implementation of a single Waterfall trial.
+## `delay.control` must already be normalized by `normalize.delay.control()`.
 simulate.trial.waterfall.tite <- function(pT, pE, method, delay.control) {
   I <- nrow(pT)
   J <- ncol(pT)

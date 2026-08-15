@@ -8,7 +8,7 @@ if (!requireNamespace("rjags", quietly = TRUE)) {
 }
 
 DEFAULT_SEED <- 2026
-DEFAULT_NTRIAL <- 50L
+DEFAULT_NTRIAL <- 1000L
 
 ## Time-to-event settings used by TITE-STEIN (Sun et al., 2025).
 ## Times are expressed in days.  Delayed outcomes are opt-in so the original
@@ -46,11 +46,15 @@ EFF_MCMC_SAMPLES <- 2000L
 EFF_MCMC_CHAINS <- 2L
 EFF_MCMC_THIN <- 1L
 
+## Derive the toxicity decision boundary from the acceptable (`phi0`) and
+## unacceptable (`phi1`) toxicity probabilities.
 calc.phi <- function(phi0, phi1) {
   log((1 - phi0) / (1 - phi1)) /
     log(phi1 * (1 - phi0) / (phi0 * (1 - phi1)))
 }
 
+## Derive the efficacy decision boundary from the unacceptable (`psi1`) and
+## desirable (`psi2`) efficacy probabilities.
 calc.psi <- function(psi1, psi2) {
   log((1 - psi1) / (1 - psi2)) /
     log(psi2 * (1 - psi1) / (psi1 * (1 - psi2)))

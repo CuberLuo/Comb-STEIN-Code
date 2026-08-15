@@ -1,5 +1,8 @@
 ## Simulate one trial under Comb-STEIN (Rule A) or RunIn-STEIN (Rule B).
 
+## Simulate one Comb-STEIN or RunIn-STEIN trial with complete or delayed data.
+## Returns allocation counts, outcomes, the selected combination, stopping
+## indicators, and (for delayed data) trial duration.
 simulate.trial.stein <- function(
   pT,
   pE,
@@ -125,6 +128,8 @@ simulate.trial.stein <- function(
   )
 }
 
+## Run the time-to-event implementation of a single STEIN trial.
+## `delay.control` must already be normalized by `normalize.delay.control()`.
 simulate.trial.stein.tite <- function(pT, pE, method, delay.control) {
   I <- nrow(pT)
   J <- ncol(pT)

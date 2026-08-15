@@ -8,10 +8,17 @@
 ##   Rscript Comb-STEIN.R S1 50 --tite --accrual=10 --tox-window=30
 ##     --eff-window=90 --suspension=0.5
 ##
+## Each command-line run writes to a new timestamped folder under output,
+## for example output/run_20260801_173045/.  Runs started in the same second
+## receive suffixes such as _01, _02, and so on.
+##
 ## The file may also be sourced to load the public functions without starting
 ## a simulation:
 ##   source("Comb-STEIN.R")
 
+## Locate the directory that contains this entry-point script.  The source
+## frame is preferred, with the Rscript --file argument and working directory
+## used as fallbacks.  Returns a normalized absolute path.
 .comb_stein_script_dir <- function() {
   frame.files <- vapply(
     sys.frames(),
@@ -61,6 +68,8 @@ for (.comb_stein_module in .comb_stein_modules) {
   )
 }
 
+## Convert a command-line Boolean spelling to a logical scalar.
+## `option` is used only to produce an informative validation error.
 .parse.cli.boolean <- function(value, option) {
   value <- tolower(as.character(value)[1])
   if (value %in% c("true", "t", "1", "yes", "y")) return(TRUE)
@@ -68,6 +77,8 @@ for (.comb_stein_module in .comb_stein_modules) {
   stop(option, " must be true or false")
 }
 
+## Remove one --option=value argument from `args`.
+## Returns both the parsed value (or `default`) and the unconsumed arguments.
 .pull.cli.option <- function(args, option, default = NULL) {
   pattern <- paste0("^--", option, "=")
   hits <- grep(pattern, args)
@@ -79,11 +90,52 @@ for (.comb_stein_module in .comb_stein_modules) {
   )
 }
 
+## Create a unique run directory below `output.root` using the start time.
+## A numeric suffix is added when another run already owns the same timestamp.
+.create.timestamped.results.dir <- function(
+  output.root,
+  started.at = Sys.time()
+) {
+  dir.create(output.root, showWarnings = FALSE, recursive = TRUE)
+  timestamp <- format(started.at, "%Y%m%d_%H%M%S")
+  base.name <- paste0("run_", timestamp)
+  attempt <- 0L
+
+  repeat {
+    folder.name <- if (attempt == 0L) {
+      base.name
+    } else {
+      paste0(base.name, "_", sprintf("%02d", attempt))
+    }
+    candidate <- file.path(output.root, folder.name)
+    if (dir.create(candidate, showWarnings = FALSE, recursive = FALSE)) {
+      return(normalizePath(candidate, mustWork = TRUE))
+    }
+    attempt <- attempt + 1L
+  }
+}
+
+## Parse CLI arguments, run the requested simulation scenarios, and save CSVs.
+## Returns the combined result table invisibly; `results.dir` can override the
+## default timestamped output directory for programmatic callers.
 run.comb.stein.cli <- function(
   args = commandArgs(trailingOnly = TRUE),
-  results.dir = file.path(.comb_stein_project_root, "output")
+  results.dir = NULL
 ) {
+  run.started.at <- Sys.time()
+  if (is.null(results.dir)) {
+    results.dir <- .create.timestamped.results.dir(
+      file.path(.comb_stein_project_root, "output"),
+      run.started.at
+    )
+  } else {
+    dir.create(results.dir, showWarnings = FALSE, recursive = TRUE)
+    results.dir <- normalizePath(results.dir, mustWork = TRUE)
+  }
+
   set.seed(DEFAULT_SEED)
+  cat("Run started:", format(run.started.at, "%Y-%m-%d %H:%M:%S %Z"), "\n")
+  cat("Output folder:", results.dir, "\n")
   cat(sprintf("Derived toxicity cutoff  phi = %.4f\n", phi))
   cat(sprintf("Derived efficacy  cutoff psi = %.4f\n", psi))
 
@@ -183,7 +235,6 @@ run.comb.stein.cli <- function(
     cat("Delayed outcomes: OFF (complete outcomes used at each decision)\n")
   }
 
-  dir.create(results.dir, showWarnings = FALSE, recursive = TRUE)
   all.results <- NULL
 
   for (name in scenarios.to.run) {

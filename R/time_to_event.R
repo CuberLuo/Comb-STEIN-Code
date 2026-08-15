@@ -7,6 +7,8 @@
 ##   * accrual can pause until the requested fraction of toxicity AND efficacy
 ##     outcomes at the current combination has been ascertained.
 
+## Merge user delay settings with defaults and validate every supported field.
+## Returns a complete, normalized delay-control list.
 normalize.delay.control <- function(control = NULL) {
   if (is.null(control)) control <- list()
   if (!is.list(control)) stop("delay.control must be a list")
@@ -47,6 +49,7 @@ normalize.delay.control <- function(control = NULL) {
   out
 }
 
+## Create an empty patient-level state table for a time-to-event trial.
 new.tite.state <- function() {
   data.frame(
     cohort = integer(),
@@ -62,6 +65,8 @@ new.tite.state <- function() {
   )
 }
 
+## Enroll one cohort and generate its toxicity/efficacy outcomes and event times.
+## Returns `state` with one row appended for each newly enrolled patient.
 tite.enroll.cohort <- function(
   state,
   cohort,
@@ -109,6 +114,9 @@ tite.enroll.cohort <- function(
   rbind(state, new_rows)
 }
 
+## Determine the earliest permitted decision time after the latest cohort.
+## When suspension is enabled, the required fraction of both endpoints at the
+## current combination must be observed before accrual can continue.
 tite.next.decision.time <- function(
   state,
   current,
@@ -140,6 +148,9 @@ tite.next.decision.time <- function(
   )
 }
 
+## Summarize all patient records at an interim analysis time.
+## Returns observed counts, endpoint-specific effective sample sizes, and
+## pending-outcome counts for every dose combination.
 tite.interim <- function(state, time, I, J, control) {
   dims <- c(I, J)
   n_mat <- x_mat <- y_mat <- ess_t <- ess_e <- matrix(0, I, J)
@@ -202,6 +213,8 @@ tite.interim <- function(state, time, I, J, control) {
   )
 }
 
+## Collapse patient-level state into fully observed final count matrices.
+## The returned list also contains total follow-up duration in days.
 tite.final.counts <- function(state, I, J) {
   n_mat <- x_mat <- y_mat <- matrix(0, I, J)
   for (k in seq_len(nrow(state))) {
