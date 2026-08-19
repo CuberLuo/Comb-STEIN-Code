@@ -1,6 +1,6 @@
-## Comb-STEIN command-line entry point and public loader.
+## Comb-STEIN 命令行入口和公共函数加载器。
 ##
-## Usage:
+## 用法：
 ##   Rscript Comb-STEIN.R
 ##   Rscript Comb-STEIN.R S1 S2 S3 50
 ##   Rscript Comb-STEIN.R S2 50 --obdc=table1
@@ -8,17 +8,16 @@
 ##   Rscript Comb-STEIN.R S1 50 --tite --accrual=10 --tox-window=30
 ##     --eff-window=90 --suspension=0.5
 ##
-## Each command-line run writes to a new timestamped folder under output,
-## for example output/run_20260801_173045/.  Runs started in the same second
-## receive suffixes such as _01, _02, and so on.
+## 每次命令行运行都会在 output 下创建新的时间戳文件夹，
+## 例如 output/run_20260801_173045/。同一秒启动的运行会追加
+## _01、_02 等后缀。
 ##
-## The file may also be sourced to load the public functions without starting
-## a simulation:
+## 也可以 source 此文件来加载公共函数，而不启动模拟：
 ##   source("Comb-STEIN.R")
 
-## Locate the directory that contains this entry-point script.  The source
-## frame is preferred, with the Rscript --file argument and working directory
-## used as fallbacks.  Returns a normalized absolute path.
+## 定位包含入口脚本的目录。优先使用 source 框架中的路径，
+## 再依次回退到 Rscript 的 --file 参数和当前工作目录。
+## 返回规范化的绝对路径。
 .comb_stein_script_dir <- function() {
   frame.files <- vapply(
     sys.frames(),
@@ -68,8 +67,8 @@ for (.comb_stein_module in .comb_stein_modules) {
   )
 }
 
-## Convert a command-line Boolean spelling to a logical scalar.
-## `option` is used only to produce an informative validation error.
+## 将命令行中的布尔值写法转换为单个逻辑值。
+## `option` 仅用于生成明确的校验错误信息。
 .parse.cli.boolean <- function(value, option) {
   value <- tolower(as.character(value)[1])
   if (value %in% c("true", "t", "1", "yes", "y")) return(TRUE)
@@ -77,8 +76,8 @@ for (.comb_stein_module in .comb_stein_modules) {
   stop(option, " must be true or false")
 }
 
-## Remove one --option=value argument from `args`.
-## Returns both the parsed value (or `default`) and the unconsumed arguments.
+## 从 `args` 中移除一个 --option=value 参数。
+## 同时返回解析后的值（或 `default`）以及未消费的参数。
 .pull.cli.option <- function(args, option, default = NULL) {
   pattern <- paste0("^--", option, "=")
   hits <- grep(pattern, args)
@@ -90,8 +89,8 @@ for (.comb_stein_module in .comb_stein_modules) {
   )
 }
 
-## Create a unique run directory below `output.root` using the start time.
-## A numeric suffix is added when another run already owns the same timestamp.
+## 使用开始时间在 `output.root` 下创建唯一的运行目录。
+## 如果同一时间戳已被占用，则追加数字后缀。
 .create.timestamped.results.dir <- function(
   output.root,
   started.at = Sys.time()
@@ -115,9 +114,9 @@ for (.comb_stein_module in .comb_stein_modules) {
   }
 }
 
-## Parse CLI arguments, run the requested simulation scenarios, and save CSVs.
-## Returns the combined result table invisibly; `results.dir` can override the
-## default timestamped output directory for programmatic callers.
+## 解析命令行参数，运行指定的模拟场景并保存 CSV 文件。
+## 不可见地返回合并结果表；程序化调用者可用 `results.dir` 覆盖
+## 默认的时间戳输出目录。
 run.comb.stein.cli <- function(
   args = commandArgs(trailingOnly = TRUE),
   results.dir = NULL

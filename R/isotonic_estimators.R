@@ -1,28 +1,25 @@
-## Bayesian quadratic-logistic efficacy estimator used by Cai, Yuan, and Ji
-## (2014) and Comb-BOIN12:
+## Cai、Yuan 和 Ji（2014）及 Comb-BOIN12 使用的贝叶斯二次逻辑回归疗效估计器：
 ##
 ##   logit(q[i,j]) = gamma[1] + gamma[2] * a[i] + gamma[3] * b[j]
 ##                   + gamma[4] * a[i]^2 + gamma[5] * b[j]^2
 ##                   + gamma[6] * a[i] * b[j].
 ##
-## Dose scores a and b are standardized to mean 0 and standard deviation 0.5.
-## The interaction term completes the second-order response surface and allows
-## the efficacy peak to move across one agent as the other agent changes.
-## A hierarchical dose-cell deviation prevents the global quadratic surface
-## from oversmoothing localized combination effects. With sparse data these
-## deviations shrink toward zero; with sufficient data they recover local peaks.
+## 剂量得分 a 和 b 标准化为均值 0、标准差 0.5。
+## 交互项补全二阶响应面，使疗效峰值可以随另一个药物的剂量变化而移动。
+## 层级化的剂量单元偏差可以避免全局二次曲面对局部组合效应过度平滑。
+## 数据稀疏时这些偏差会收缩到 0；数据充足时则可以恢复局部峰值。
 
 .efficacy_fit_cache <- new.env(parent = emptyenv())
 
-## Standardize ordered dose levels to mean zero and standard deviation 0.5.
-## A single-level agent receives the neutral score zero.
+## 将有序剂量水平标准化为均值 0、标准差 0.5。
+## 只有一个剂量水平的药物使用中性得分 0。
 .standardize.dose.scores <- function(n.levels) {
   scores <- seq_len(n.levels)
   if (n.levels == 1L) return(0)
   (scores - mean(scores)) / (2 * stats::sd(scores))
 }
 
-## Serialize efficacy counts and MCMC settings into a deterministic cache key.
+## 将疗效计数和 MCMC 设置序列化为确定性的缓存键。
 .efficacy.cache.key <- function(
   y_mat,
   n_mat,
@@ -44,7 +41,7 @@
   )
 }
 
-## Derive a reproducible, positive JAGS seed from the observed count matrices.
+## 根据观测计数矩阵生成可复现且为正的 JAGS 随机种子。
 .efficacy.jags.seed <- function(y_mat, n_mat) {
   values <- c(
     nrow(y_mat),
@@ -57,9 +54,8 @@
   as.integer((sum(weighted) %% 2147483646) + 1)
 }
 
-## Estimate efficacy probabilities with the hierarchical quadratic-logistic
-## JAGS model.  Inputs are efficacy and sample-size matrices with matching
-## dimensions; the return value is a posterior-mean probability matrix.
+## 使用层级二次逻辑回归 JAGS 模型估计疗效概率。
+## 输入为维度一致的疗效计数矩阵和样本量矩阵；返回后验均值概率矩阵。
 eff.estimate <- function(
   y_mat,
   n_mat,
@@ -174,10 +170,9 @@ eff.estimate <- function(
   )
 
   draws.per.chain <- ceiling(n_samples / n_chains)
-  ## Read the monitored array directly from rjags.  Converting a long sequence
-  ## of fits through coda::as.matrix() can occasionally retain an expression
-  ## object as row names and make base::as.data.frame() fail.  The raw mcarray
-  ## has dimensions q-cell x iteration x chain and does not need row names.
+  ## 直接从 rjags 读取监测数组。对大量拟合结果调用 coda::as.matrix()
+  ## 偶尔会把 expression 对象保留为行名，导致 base::as.data.frame() 失败。
+  ## 原始 mcarray 的维度为 q 单元格 x 迭代 x 链，不需要行名。
   samples <- rjags::jags.samples(
     model,
     variable.names = "q",
@@ -219,8 +214,8 @@ eff.estimate <- function(
   q.final
 }
 
-## Calculate the design utility from toxicity (`p`) and efficacy (`q`).
-## Toxicity above `phi` receives the additional penalty weighted by `w2`.
+## 根据毒性（`p`）和疗效（`q`）计算设计效用。
+## 毒性高于 `phi` 时，额外施加由 `w2` 加权的惩罚。
 utility.fn <- function(p, q, w1, w2, phi) {
   q - w1 * p - w2 * p * (p > phi)
 }

@@ -10,9 +10,8 @@ if (!requireNamespace("rjags", quietly = TRUE)) {
 DEFAULT_SEED <- 2026
 DEFAULT_NTRIAL <- 1000L
 
-## Time-to-event settings used by TITE-STEIN (Sun et al., 2025).
-## Times are expressed in days.  Delayed outcomes are opt-in so the original
-## complete-outcome simulation remains the default.
+## TITE-STEIN 使用的时间到事件设置（Sun 等，2025）。
+## 时间单位为天。延迟结局需要显式开启，因此原有的完整结局模拟仍是默认行为。
 DEFAULT_DELAY_CONTROL <- list(
   accrual = 10,
   tox_window = 30,
@@ -24,7 +23,7 @@ DEFAULT_DELAY_CONTROL <- list(
   eff_distribution = "uniform"
 )
 
-## Design parameters (Section 3 of the manuscript)
+## 设计参数（论文第 3 节）。
 phi0 <- 0.3
 phi1 <- 0.5
 psi1 <- 0.3
@@ -40,21 +39,19 @@ EFF_STOP_N <- 6
 EFF_STOP_CUT <- 0.7
 EFF_STOP_PROB <- 0.9
 
-## Bayesian quadratic-logistic efficacy model (Cai, Yuan, and Ji, 2014).
+## 贝叶斯二次逻辑回归疗效模型（Cai、Yuan 和 Ji，2014）。
 EFF_MCMC_BURNIN <- 1000L
 EFF_MCMC_SAMPLES <- 2000L
 EFF_MCMC_CHAINS <- 2L
 EFF_MCMC_THIN <- 1L
 
-## Derive the toxicity decision boundary from the acceptable (`phi0`) and
-## unacceptable (`phi1`) toxicity probabilities.
+## 根据可接受（`phi0`）和不可接受（`phi1`）的毒性概率推导毒性决策边界。
 calc.phi <- function(phi0, phi1) {
   log((1 - phi0) / (1 - phi1)) /
     log(phi1 * (1 - phi0) / (phi0 * (1 - phi1)))
 }
 
-## Derive the efficacy decision boundary from the unacceptable (`psi1`) and
-## desirable (`psi2`) efficacy probabilities.
+## 根据不可接受（`psi1`）和理想（`psi2`）的疗效概率推导疗效决策边界。
 calc.psi <- function(psi1, psi2) {
   log((1 - psi1) / (1 - psi2)) /
     log(psi2 * (1 - psi1) / (psi1 * (1 - psi2)))

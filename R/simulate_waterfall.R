@@ -1,8 +1,7 @@
-## Simplified row-by-row waterfall comparator.
+## 简化的逐行 Waterfall 对照方法。
 
-## Simulate one row-wise Waterfall trial with complete or delayed outcomes.
-## Returns allocation counts, outcomes, the selected combination, stopping
-## indicators, and (for delayed data) trial duration.
+## 使用完整或延迟结局模拟一次逐行 Waterfall 试验。
+## 返回分配计数、结局、选定组合、停止指标，以及（延迟数据时的）试验时长。
 simulate.trial.waterfall <- function(
   pT,
   pE,
@@ -126,8 +125,8 @@ simulate.trial.waterfall <- function(
   )
 }
 
-## Run the time-to-event implementation of a single Waterfall trial.
-## `delay.control` must already be normalized by `normalize.delay.control()`.
+## 运行一次 Waterfall 试验的时间到事件版本。
+## `delay.control` 必须已经由 `normalize.delay.control()` 规范化。
 simulate.trial.waterfall.tite <- function(pT, pE, method, delay.control) {
   I <- nrow(pT)
   J <- ncol(pT)

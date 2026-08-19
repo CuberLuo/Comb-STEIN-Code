@@ -1,14 +1,13 @@
-## Time-to-event data generation and effective-sample-size calculations.
+## 时间到事件数据生成和有效样本量计算。
 ##
-## This follows the TITE-STEIN paper and its reference implementation:
-##   * event times are uniform within their assessment windows;
-##   * a pending no-event outcome contributes follow-up/window to the ESS;
-##   * an observed event or a completed no-event assessment contributes 1;
-##   * accrual can pause until the requested fraction of toxicity AND efficacy
-##     outcomes at the current combination has been ascertained.
+## 本模块遵循 TITE-STEIN 论文及其参考实现：
+##   * 事件时间在各自的评估窗口内服从均匀分布；
+##   * 尚未发生事件的待定结局按随访时间/评估窗口计入有效样本量；
+##   * 已观测事件或已完成的无事件评估计为 1；
+##   * 当前组合的毒性和疗效结局达到要求的确认比例后，才能继续入组。
 
-## Merge user delay settings with defaults and validate every supported field.
-## Returns a complete, normalized delay-control list.
+## 将用户延迟设置与默认值合并，并校验所有支持的字段。
+## 返回完整且已规范化的延迟控制列表。
 normalize.delay.control <- function(control = NULL) {
   if (is.null(control)) control <- list()
   if (!is.list(control)) stop("delay.control must be a list")
@@ -49,7 +48,7 @@ normalize.delay.control <- function(control = NULL) {
   out
 }
 
-## Create an empty patient-level state table for a time-to-event trial.
+## 创建时间到事件试验的空患者级状态表。
 new.tite.state <- function() {
   data.frame(
     cohort = integer(),
@@ -65,8 +64,8 @@ new.tite.state <- function() {
   )
 }
 
-## Enroll one cohort and generate its toxicity/efficacy outcomes and event times.
-## Returns `state` with one row appended for each newly enrolled patient.
+## 入组一个队列，并生成其毒性/疗效结局及事件时间。
+## 返回追加了每位新入组患者一行记录的 `state`。
 tite.enroll.cohort <- function(
   state,
   cohort,
@@ -114,9 +113,8 @@ tite.enroll.cohort <- function(
   rbind(state, new_rows)
 }
 
-## Determine the earliest permitted decision time after the latest cohort.
-## When suspension is enabled, the required fraction of both endpoints at the
-## current combination must be observed before accrual can continue.
+## 确定最近一个队列之后允许决策的最早时间。
+## 启用暂停时，当前组合的两个终点都必须达到要求的确认比例后才能继续入组。
 tite.next.decision.time <- function(
   state,
   current,
@@ -148,9 +146,8 @@ tite.next.decision.time <- function(
   )
 }
 
-## Summarize all patient records at an interim analysis time.
-## Returns observed counts, endpoint-specific effective sample sizes, and
-## pending-outcome counts for every dose combination.
+## 汇总中期分析时点的所有患者记录。
+## 返回每个剂量组合的观测计数、各终点有效样本量和待定结局计数。
 tite.interim <- function(state, time, I, J, control) {
   dims <- c(I, J)
   n_mat <- x_mat <- y_mat <- ess_t <- ess_e <- matrix(0, I, J)
@@ -213,8 +210,8 @@ tite.interim <- function(state, time, I, J, control) {
   )
 }
 
-## Collapse patient-level state into fully observed final count matrices.
-## The returned list also contains total follow-up duration in days.
+## 将患者级状态汇总为完整观测的最终计数矩阵。
+## 返回列表还包含以天为单位的总随访时长。
 tite.final.counts <- function(state, I, J) {
   n_mat <- x_mat <- y_mat <- matrix(0, I, J)
   for (k in seq_len(nrow(state))) {

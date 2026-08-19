@@ -1,10 +1,9 @@
-## Diversified simulation scenarios derived from the manuscript setting.
-## All toxicity and efficacy probabilities are stored to at most two decimal
-## places. Toxicity is nondecreasing in both agents. Under the utility rule,
-## S1-S4 have one OBDC, S5-S8 have two OBDCs, and S9-S12 have three OBDCs;
-## the complete OBDC location set is different in every scenario.
+## 根据论文设置构造的多样化模拟场景。
+## 所有毒性和疗效概率最多保留两位小数。毒性随两个药物剂量均不下降。
+## 按照效用规则，S1-S4 有 1 个 OBDC，S5-S8 有 2 个 OBDC，S9-S12 有 3 个 OBDC；
+## 每个场景的完整 OBDC 位置集合都不同。
 
-## Convert row-wise toxicity/efficacy value pairs into a two-column matrix.
+## 将按行排列的毒性/疗效数值对转换为两列矩阵。
 mk <- function(...) {
   matrix(c(...), ncol = 2, byrow = TRUE)
 }
@@ -79,7 +78,7 @@ nrow_map <- c(
   S7 = 3, S8 = 3, S9 = 3, S10 = 3, S11 = 2, S12 = 2
 )
 
-## Convert row/column index pairs into a named two-column OBDC matrix.
+## 将行/列索引对转换为带名称的两列 OBDC 矩阵。
 obdc <- function(...) {
   matrix(
     c(...),
@@ -104,8 +103,8 @@ table1.obdcs <- list(
   S12 = obdc(1,3, 2,2, 2,3)
 )
 
-## Reshape a named scenario into toxicity and efficacy dose-combination grids.
-## Returns a list containing matrices `pT` and `pE`.
+## 将命名场景重塑为毒性和疗效剂量组合网格。
+## 返回包含 `pT` 和 `pE` 矩阵的列表。
 build.pTpE <- function(name) {
   mat <- scenarios[[name]]
   I <- nrow_map[[name]]

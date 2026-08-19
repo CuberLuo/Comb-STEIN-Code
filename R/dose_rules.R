@@ -1,25 +1,25 @@
-## Posterior monitoring, admissibility updates, and dose-selection rules.
+## 后验监测、可接受性更新和剂量选择规则。
 
-## Compute Pr(toxicity probability > `cut`) under a Beta(1, 1) prior.
-## `x` and `n` may be scalars, vectors, or conformable matrices.
+## 在 Beta(1, 1) 先验下计算 Pr（毒性概率 > `cut`）。
+## `x` 和 `n` 可以是标量、向量或维度相容的矩阵。
 pr.overtox <- function(x, n, cut) {
   1 - pbeta(cut, x + 1, n - x + 1)
 }
 
-## Compute Pr(efficacy probability < `cut`) under a Beta(1, 1) prior.
-## `y` and `n` may be scalars, vectors, or conformable matrices.
+## 在 Beta(1, 1) 先验下计算 Pr（疗效概率 < `cut`）。
+## `y` 和 `n` 可以是标量、向量或维度相容的矩阵。
 pr.ineff <- function(y, n, cut) {
   pbeta(cut, y + 1, n - y + 1)
 }
 
-## Compute Pr(efficacy probability > `cut`) under a Beta(1, 1) prior.
-## `y` and `n` may be scalars, vectors, or conformable matrices.
+## 在 Beta(1, 1) 先验下计算 Pr（疗效概率 > `cut`）。
+## `y` 和 `n` 可以是标量、向量或维度相容的矩阵。
 pr.eff.gt <- function(y, n, cut) {
   1 - pbeta(cut, y + 1, n - y + 1)
 }
 
-## Flag observed dose combinations that cross toxicity or futility thresholds.
-## Returns logical matrices named `overtox` and `ineff`.
+## 标记超过毒性或无效性阈值的已观测剂量组合。
+## 返回名为 `overtox` 和 `ineff` 的逻辑矩阵。
 monitor.flags <- function(x_mat, y_mat, n_tox, n_eff = n_tox) {
   observed_tox <- n_tox > 0
   observed_eff <- n_eff > 0
@@ -30,8 +30,8 @@ monitor.flags <- function(x_mat, y_mat, n_tox, n_eff = n_tox) {
   list(overtox = overtox, ineff = ineff)
 }
 
-## Identify all true optimal biological dose combinations by maximum utility.
-## Returns a two-column matrix of row and column indices, including exact ties.
+## 按效用最大值识别所有真实最优生物剂量组合。
+## 返回包含行、列索引的两列矩阵，并保留完全并列的组合。
 get.true.obdc <- function(pT, pE) {
   utility <- utility.fn(pT, pE, w1, w2, phi)
   which(
@@ -40,9 +40,9 @@ get.true.obdc <- function(pT, pE) {
   )
 }
 
-## Apply posterior safety and futility rules to the admissibility matrix.
-## An overtoxic cell also eliminates combinations northeast of that cell;
-## an inefficacious cell eliminates only itself.
+## 将后验安全性和无效性规则应用于可接受性矩阵。
+## 过度毒性的单元格还会排除其东北方向的组合；
+## 疗效不足的单元格只排除自身。
 update.admissible <- function(
   x_mat,
   y_mat,
@@ -63,8 +63,8 @@ update.admissible <- function(
   admissible
 }
 
-## Build the local candidate set for the next dose-combination assignment.
-## Escalation is excluded when the current observed toxicity rate exceeds phi.
+## 构造下一次剂量组合分配的局部候选集合。
+## 当前观测毒性率超过 phi 时，不允许升级。
 alt.set.C <- function(i, j, I, J, p_ij_hat) {
   candidates <- list()
   if (p_ij_hat > phi) {
@@ -80,8 +80,8 @@ alt.set.C <- function(i, j, I, J, p_ij_hat) {
   candidates
 }
 
-## Select the candidate with the largest posterior probability of efficacy.
-## A deterministic dose-index term breaks otherwise equal posterior scores.
+## 选择疗效后验概率最大的候选组合。
+## 使用确定性的剂量索引项打破后验得分相同的情况。
 pick.best.by.eff <- function(cand_list, y_mat, n_mat) {
   posterior <- sapply(cand_list, function(ij) {
     score <- pr.eff.gt(
@@ -94,8 +94,8 @@ pick.best.by.eff <- function(cand_list, y_mat, n_mat) {
   cand_list[[which.max(posterior)]]
 }
 
-## Select the final treated, admissible combination with maximum fitted utility.
-## Returns c(row, column), or two NA integers when no combination is eligible.
+## 在已治疗且可接受的组合中选择拟合效用最大的最终组合。
+## 返回 c(row, column)；没有符合条件的组合时返回两个 NA 整数。
 final.selection <- function(x_mat, y_mat, n_mat, admissible) {
   eligible <- admissible & n_mat > 0
   if (!any(eligible)) return(c(NA_integer_, NA_integer_))
@@ -113,8 +113,8 @@ final.selection <- function(x_mat, y_mat, n_mat, admissible) {
   selected[1, ]
 }
 
-## Construct the alternating row/column escalation path used during run-in.
-## The returned list contains at most `ncohort` integer index pairs.
+## 构造入组阶段使用的行列交替升级路径。
+## 返回列表中最多包含 `ncohort` 个整数索引对。
 make.runin.path <- function(I, J, ncohort = RUNIN_COHORTS) {
   path <- list(c(1L, 1L))
   current <- c(1L, 1L)

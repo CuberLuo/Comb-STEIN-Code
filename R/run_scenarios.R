@@ -1,8 +1,7 @@
-## Repeated-trial simulation and summary aggregation.
+## 重复试验模拟和汇总聚合。
 
-## Simulate every design method repeatedly under one named scenario.
-## Returns a method-level operating-characteristic table and stores the true
-## OBDC definition and delay settings as attributes.
+## 在一个命名场景下重复模拟每种设计方法。
+## 返回方法级运行特征表，并将真实 OBDC 定义和延迟设置保存为属性。
 run.scenario <- function(
   name,
   ntrial = DEFAULT_NTRIAL,
