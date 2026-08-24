@@ -1,11 +1,11 @@
 ## Comb-STEIN 命令行入口和公共函数加载器。
 ##
 ## 用法：
-##   Rscript Comb-STEIN.R
-##   Rscript Comb-STEIN.R S1 S2 S3 50
-##   Rscript Comb-STEIN.R S2 50 --obdc=table1
-##   Rscript Comb-STEIN.R S1 50 --delayed=true
-##   Rscript Comb-STEIN.R S1 50 --tite --accrual=10 --tox-window=30
+##   Rscript main.R
+##   Rscript main.R S1 S2 S3 50
+##   Rscript main.R S2 50 --obdc=table1
+##   Rscript main.R S1 50 --delayed=true
+##   Rscript main.R S1 50 --tite --accrual=10 --tox-window=30
 ##     --eff-window=90 --suspension=0.5
 ##
 ## 每次命令行运行都会在 output 下创建新的时间戳文件夹，
@@ -13,7 +13,7 @@
 ## _01、_02 等后缀。
 ##
 ## 也可以 source 此文件来加载公共函数，而不启动模拟：
-##   source("Comb-STEIN.R")
+##   source("main.R")
 
 ## 定位包含入口脚本的目录。优先使用 source 框架中的路径，
 ## 再依次回退到 Rscript 的 --file 参数和当前工作目录。
@@ -62,7 +62,7 @@
 
 for (.comb_stein_module in .comb_stein_modules) {
   sys.source(
-    file.path(.comb_stein_root, "R", .comb_stein_module),
+    file.path(.comb_stein_root, .comb_stein_module),
     envir = environment()
   )
 }
@@ -293,10 +293,4 @@ run.comb.stein.cli <- function(
   invisible(all.results)
 }
 
-rm(.comb_stein_module)
-rm(.comb_stein_modules)
-rm(.comb_stein_root)
-
-if (sys.nframe() == 0L) {
-  run.comb.stein.cli()
-}
+run.comb.stein.cli()

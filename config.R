@@ -8,7 +8,7 @@ if (!requireNamespace("rjags", quietly = TRUE)) {
 }
 
 DEFAULT_SEED <- 2026
-DEFAULT_NTRIAL <- 1000L
+DEFAULT_NTRIAL <- 1L#试验次数
 
 ## TITE-STEIN 使用的时间到事件设置（Sun 等，2025）。
 ## 时间单位为天。延迟结局需要显式开启，因此原有的完整结局模拟仍是默认行为。
