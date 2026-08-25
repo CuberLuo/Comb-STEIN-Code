@@ -78,31 +78,6 @@ nrow_map <- c(
   S7 = 3, S8 = 3, S9 = 3, S10 = 3, S11 = 2, S12 = 2
 )
 
-## 将行/列索引对转换为带名称的两列 OBDC 矩阵。
-obdc <- function(...) {
-  matrix(
-    c(...),
-    ncol = 2,
-    byrow = TRUE,
-    dimnames = list(NULL, c("i", "j"))
-  )
-}
-
-table1.obdcs <- list(
-  S1  = obdc(1,2),
-  S2  = obdc(2,4),
-  S3  = obdc(3,2),
-  S4  = obdc(1,5),
-  S5  = obdc(1,3, 2,2),
-  S6  = obdc(1,4, 2,3),
-  S7  = obdc(2,2, 3,1),
-  S8  = obdc(2,4, 3,3),
-  S9  = obdc(1,2, 2,1, 2,2),
-  S10 = obdc(1,3, 2,2, 3,1),
-  S11 = obdc(1,1, 1,2, 2,1),
-  S12 = obdc(1,3, 2,2, 2,3)
-)
-
 ## 将命名场景重塑为毒性和疗效剂量组合网格。
 ## 返回包含 `pT` 和 `pE` 矩阵的列表。
 build.pTpE <- function(name) {

@@ -1,38 +1,20 @@
 ## 重复试验模拟和汇总聚合。
 
 ## 在一个命名场景下重复模拟每种设计方法。
-## 返回方法级运行特征表，并将真实 OBDC 定义和延迟设置保存为属性。
+## 返回方法级运行特征表，并将真实 OBDC 和延迟设置保存为属性。
 run.scenario <- function(
   name,
   ntrial = DEFAULT_NTRIAL,
-  obdc.definition = c("utility", "table1"),
   delayed = FALSE,
   delay.control = NULL
 ) {
-  obdc.definition <- match.arg(obdc.definition)
-  if (length(delayed) != 1L || is.na(delayed)) {
-    stop("delayed must be TRUE or FALSE")
-  }
   delayed <- isTRUE(delayed)
   if (delayed) delay.control <- normalize.delay.control(delay.control)
-  if (!name %in% names(scenarios)) stop("Unknown scenario: ", name)
-  if (
-    length(ntrial) != 1L ||
-      !is.finite(ntrial) ||
-      ntrial < 1 ||
-      ntrial != as.integer(ntrial)
-  ) {
-    stop("ntrial must be a positive integer")
-  }
 
   scenario <- build.pTpE(name)
   pT <- scenario$pT
   pE <- scenario$pE
-  true.ij <- if (obdc.definition == "utility") {
-    get.true.obdc(pT, pE)
-  } else {
-    table1.obdcs[[name]]
-  }
+  true.ij <- get.true.obdc(pT, pE)
 
   methods <- c(
     "Comb-STEIN-L",
@@ -137,7 +119,6 @@ run.scenario <- function(
   }
 
   attr(out, "true.obdcs") <- true.ij
-  attr(out, "obdc.definition") <- obdc.definition
   attr(out, "delayed") <- delayed
   if (delayed) attr(out, "delay.control") <- delay.control
   out

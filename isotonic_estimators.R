@@ -65,29 +65,6 @@ eff.estimate <- function(
   thin = EFF_MCMC_THIN,
   use_cache = TRUE
 ) {
-  if (!is.matrix(y_mat) || !is.matrix(n_mat)) {
-    stop("y_mat and n_mat must be matrices.")
-  }
-  if (!identical(dim(y_mat), dim(n_mat))) {
-    stop("y_mat and n_mat must have identical dimensions.")
-  }
-  if (any(!is.finite(y_mat)) || any(!is.finite(n_mat))) {
-    stop("y_mat and n_mat must contain only finite values.")
-  }
-  if (any(y_mat < 0) || any(n_mat < 0) || any(y_mat > n_mat)) {
-    stop("Counts must satisfy 0 <= y_mat <= n_mat.")
-  }
-  if (any(y_mat != floor(y_mat)) || any(n_mat != floor(n_mat))) {
-    stop("y_mat and n_mat must contain integer counts.")
-  }
-
-  mcmc.settings <- c(n_burnin, n_samples, n_chains, thin)
-  if (any(!is.finite(mcmc.settings)) ||
-      any(mcmc.settings < 1) ||
-      any(mcmc.settings != floor(mcmc.settings))) {
-    stop("MCMC settings must be positive integers.")
-  }
-
   I <- nrow(y_mat)
   J <- ncol(y_mat)
   cache.key <- .efficacy.cache.key(

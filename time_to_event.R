@@ -6,44 +6,15 @@
 ##   * 已观测事件或已完成的无事件评估计为 1；
 ##   * 当前组合的毒性和疗效结局达到要求的确认比例后，才能继续入组。
 
-## 将用户延迟设置与默认值合并，并校验所有支持的字段。
-## 返回完整且已规范化的延迟控制列表。
+## 将用户延迟设置与默认值合并，返回完整的延迟控制列表。
 normalize.delay.control <- function(control = NULL) {
   if (is.null(control)) control <- list()
-  if (!is.list(control)) stop("delay.control must be a list")
-
-  unknown <- setdiff(names(control), names(DEFAULT_DELAY_CONTROL))
-  if (length(unknown) > 0L) {
-    stop("Unknown delay.control field(s): ", paste(unknown, collapse = ", "))
-  }
   out <- utils::modifyList(DEFAULT_DELAY_CONTROL, control)
-
-  positive <- c("accrual", "tox_window", "eff_window")
-  for (field in positive) {
-    value <- out[[field]]
-    if (length(value) != 1L || !is.finite(value) || value <= 0) {
-      stop(field, " must be a positive finite number")
-    }
-  }
-  if (
-    length(out$suspension) != 1L ||
-      !is.finite(out$suspension) ||
-      out$suspension <= 0 ||
-      out$suspension > 1
-  ) {
-    stop("suspension must lie in (0, 1]")
-  }
   for (field in c("use_suspension", "accrual_random")) {
-    if (length(out[[field]]) != 1L || is.na(out[[field]])) {
-      stop(field, " must be TRUE or FALSE")
-    }
     out[[field]] <- as.logical(out[[field]])
   }
   for (field in c("tox_distribution", "eff_distribution")) {
     out[[field]] <- tolower(as.character(out[[field]])[1])
-    if (out[[field]] != "uniform") {
-      stop(field, " currently supports only 'uniform'")
-    }
   }
   out
 }

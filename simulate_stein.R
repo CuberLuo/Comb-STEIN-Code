@@ -9,10 +9,6 @@ simulate.trial.stein <- function(
   delayed = FALSE,
   delay.control = NULL
 ) {
-  method <- match.arg(method)
-  if (length(delayed) != 1L || is.na(delayed)) {
-    stop("delayed must be TRUE or FALSE")
-  }
   if (isTRUE(delayed)) {
     return(simulate.trial.stein.tite(
       pT,

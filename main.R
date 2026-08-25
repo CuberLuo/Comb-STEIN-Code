@@ -3,22 +3,18 @@
 ## 用法：
 ##   Rscript main.R
 ##   Rscript main.R S1 S2 S3 50
-##   Rscript main.R S2 50 --obdc=table1
 ##   Rscript main.R S1 50 --delayed=true
 ##   Rscript main.R S1 50 --tite --accrual=10 --tox-window=30
 ##     --eff-window=90 --suspension=0.5
 ##
 ## 每次命令行运行都会在 output 下创建新的时间戳文件夹，
-## 例如 output/run_20260801_173045/。同一秒启动的运行会追加
-## _01、_02 等后缀。
-##
-## 也可以 source 此文件来加载公共函数，而不启动模拟：
-##   source("main.R")
 
 ## 定位包含入口脚本的目录。优先使用 source 框架中的路径，
 ## 再依次回退到 Rscript 的 --file 参数和当前工作目录。
 ## 返回规范化的绝对路径。
 .comb_stein_script_dir <- function() {
+  ## RStudio 的 debugSource() 可能在调用栈中加入一个工作目录路径，
+  ## 因此不能盲目使用最后一个 sys.frames()$ofile。
   frame.files <- vapply(
     sys.frames(),
     function(frame) {
@@ -28,20 +24,30 @@
   )
   frame.files <- frame.files[nzchar(frame.files)]
   if (length(frame.files) > 0) {
-    return(dirname(normalizePath(
-      frame.files[length(frame.files)],
-      mustWork = TRUE
-    )))
+    frame.dirs <- unique(vapply(
+      frame.files,
+      function(path) dirname(normalizePath(path, mustWork = TRUE)),
+      character(1)
+    ))
+    ## 选择真正包含本脚本模块的目录，例如 code/，而不是项目根目录。
+    valid.dir <- frame.dirs[file.exists(file.path(frame.dirs, "config.R"))]
+    if (length(valid.dir) > 0) return(valid.dir[length(valid.dir)])
   }
 
   file.arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
   if (length(file.arg) > 0) {
-    return(dirname(normalizePath(
+    file.dir <- dirname(normalizePath(
       sub("^--file=", "", file.arg[1]),
       mustWork = TRUE
-    )))
+    ))
+    if (file.exists(file.path(file.dir, "config.R"))) return(file.dir)
   }
-  normalizePath(getwd(), mustWork = TRUE)
+  working.dir <- normalizePath(getwd(), mustWork = TRUE)
+  if (file.exists(file.path(working.dir, "config.R"))) return(working.dir)
+  if (file.exists(file.path(working.dir, "code", "config.R"))) {
+    return(normalizePath(file.path(working.dir, "code"), mustWork = TRUE))
+  }
+  stop("无法定位 main.R 所在目录：未找到 config.R")
 }
 
 .comb_stein_root <- .comb_stein_script_dir()
@@ -72,8 +78,7 @@ for (.comb_stein_module in .comb_stein_modules) {
 .parse.cli.boolean <- function(value, option) {
   value <- tolower(as.character(value)[1])
   if (value %in% c("true", "t", "1", "yes", "y")) return(TRUE)
-  if (value %in% c("false", "f", "0", "no", "n")) return(FALSE)
-  stop(option, " must be true or false")
+  FALSE
 }
 
 ## 从 `args` 中移除一个 --option=value 参数。
@@ -81,7 +86,6 @@ for (.comb_stein_module in .comb_stein_modules) {
 .pull.cli.option <- function(args, option, default = NULL) {
   pattern <- paste0("^--", option, "=")
   hits <- grep(pattern, args)
-  if (length(hits) > 1L) stop("--", option, " may be specified only once")
   if (length(hits) == 0L) return(list(value = default, args = args))
   list(
     value = sub(pattern, "", args[hits]),
@@ -121,50 +125,56 @@ run.comb.stein.cli <- function(
   args = commandArgs(trailingOnly = TRUE),
   results.dir = NULL
 ) {
+  ## 记录本次运行的开始时间。这个时间既用于屏幕输出，
+  ## 也用于生成本次运行专属的结果文件夹名称。
   run.started.at <- Sys.time()
   if (is.null(results.dir)) {
+    ## 如果没有指定输出目录，就在项目根目录的 output/ 下
+    ## 自动创建一个带时间戳的文件夹，避免覆盖以前的结果。
     results.dir <- .create.timestamped.results.dir(
       file.path(.comb_stein_project_root, "output"),
       run.started.at
     )
   } else {
+    ## 程序化调用时也可以手动指定输出目录。
+    ## 如果目录不存在，则递归创建；normalizePath() 用于得到绝对路径。
     dir.create(results.dir, showWarnings = FALSE, recursive = TRUE)
     results.dir <- normalizePath(results.dir, mustWork = TRUE)
   }
 
+  ## 固定随机种子，使同样的参数能够得到可重复的模拟结果。
   set.seed(DEFAULT_SEED)
+  ## 输出本次运行的基本信息和由设计参数推导出的两个阈值：
+  ## phi 是毒性阈值，psi 是疗效阈值。
   cat("Run started:", format(run.started.at, "%Y-%m-%d %H:%M:%S %Z"), "\n")
   cat("Output folder:", results.dir, "\n")
   cat(sprintf("Derived toxicity cutoff  phi = %.4f\n", phi))
   cat(sprintf("Derived efficacy  cutoff psi = %.4f\n", psi))
 
+  ## 默认每个场景重复的试验次数。
+  ## 如果命令行中提供了数字，后面会用该数字覆盖默认值。
   ntrial <- DEFAULT_NTRIAL
 
-  pulled <- .pull.cli.option(args, "obdc", "utility")
-  obdc.definition <- pulled$value
-  args <- pulled$args
-  if (!obdc.definition %in% c("utility", "table1")) {
-    stop("--obdc must be 'utility' or 'table1'")
-  }
-
+  ## delayed = FALSE 表示使用完整结局；
+  ## delayed = TRUE 表示启用 TITE/延迟结局模拟。
+  ## 默认采用完整结局，只有明确指定参数时才启用延迟结局。
   delayed <- FALSE
   delayed.flag <- .pull.cli.option(args, "delayed", NULL)
   args <- delayed.flag$args
   if (!is.null(delayed.flag$value)) {
+    ## 处理 --delayed=true 或 --delayed=false 形式的参数。
     delayed <- .parse.cli.boolean(delayed.flag$value, "--delayed")
   }
+  ## 也支持更简洁的开关形式 --tite 和 --no-tite。
   has.tite <- "--tite" %in% args
   has.no.tite <- "--no-tite" %in% args
-  if (has.tite && has.no.tite) {
-    stop("Use only one of --tite and --no-tite")
-  }
-  if (!is.null(delayed.flag$value) && (has.tite || has.no.tite)) {
-    stop("Do not combine --delayed=... with --tite or --no-tite")
-  }
+  ## 读取开关的值后，从参数列表中删除它们，避免被误判为场景名称。
   if (has.tite) delayed <- TRUE
   if (has.no.tite) delayed <- FALSE
   args <- args[!args %in% c("--tite", "--no-tite")]
 
+  ## delay.control 保存延迟结局相关的设置。
+  ## 先建立“命令行参数名 -> R 内部名称”的对应关系。
   delay.control <- list()
   numeric.options <- c(
     accrual = "accrual",
@@ -173,12 +183,13 @@ run.comb.stein.cli <- function(
     suspension = "suspension"
   )
   for (option in names(numeric.options)) {
+    ## 读取数值型延迟参数，例如：
+    ## --accrual=10、--tox-window=30、--eff-window=90。
     pulled <- .pull.cli.option(args, option, NULL)
     args <- pulled$args
     if (!is.null(pulled$value)) {
-      value <- suppressWarnings(as.numeric(pulled$value))
-      if (!is.finite(value)) stop("--", option, " must be numeric")
-      delay.control[[numeric.options[[option]]]] <- value
+      delay.control[[numeric.options[[option]]]] <-
+        as.numeric(pulled$value)
     }
   }
   logical.options <- c(
@@ -186,6 +197,8 @@ run.comb.stein.cli <- function(
     `accrual-random` = "accrual_random"
   )
   for (option in names(logical.options)) {
+    ## 读取逻辑型延迟参数，例如：
+    ## --use-suspension=true 或 --accrual-random=false。
     pulled <- .pull.cli.option(args, option, NULL)
     args <- pulled$args
     if (!is.null(pulled$value)) {
@@ -193,18 +206,17 @@ run.comb.stein.cli <- function(
         .parse.cli.boolean(pulled$value, paste0("--", option))
     }
   }
-  if (length(delay.control) > 0L && !delayed) {
-    stop("Delay settings require --tite or --delayed=true")
-  }
-  if (delayed) delay.control <- normalize.delay.control(delay.control)
-
-  unknown.options <- args[grepl("^--", args)]
-  if (length(unknown.options) > 0L) {
-    stop("Unknown option(s): ", paste(unknown.options, collapse = ", "))
+  if (delayed) {
+    ## 补齐用户未指定的延迟参数。
+    delay.control <- normalize.delay.control(delay.control)
   }
 
+  ## 默认运行 scenarios.R 中定义的全部场景。
+  ## 用户也可以在命令行中指定一个或多个场景名称。
   scenarios.to.run <- names(scenarios)
   if (length(args) > 0) {
+    ## 数字参数解释为每个场景的重复次数，例如：main.R S1 S2 50。
+    ## 非数字参数解释为场景名称，例如 S1、S2。
     is.numeric.arg <- suppressWarnings(!is.na(as.numeric(args)))
     if (any(is.numeric.arg)) {
       ntrial <- as.numeric(args[is.numeric.arg])[1]
@@ -213,11 +225,7 @@ run.comb.stein.cli <- function(
     if (length(scenario.args) > 0) scenarios.to.run <- scenario.args
   }
 
-  unknown <- setdiff(scenarios.to.run, names(scenarios))
-  if (length(unknown) > 0) {
-    stop("Unknown scenario(s): ", paste(unknown, collapse = ", "))
-  }
-
+  ## 在正式开始模拟前，把实际采用的延迟设置打印出来，方便核对。
   if (delayed) {
     cat(sprintf(
       paste0(
@@ -234,17 +242,23 @@ run.comb.stein.cli <- function(
     cat("Delayed outcomes: OFF (complete outcomes used at each decision)\n")
   }
 
+  ## 用于保存所有场景的汇总结果。
   all.results <- NULL
 
   for (name in scenarios.to.run) {
+    ## 每个场景都会调用 run.scenario()，该函数会依次模拟五种方法：
+    ## Comb-STEIN-L、Comb-STEIN-H、Runin-STEIN、Waterfall-L、Waterfall-H。
+    ## OBDC 始终定义为 utility 最大的组合
     cat("Running scenario", name, "with ntrial =", ntrial, "...\n")
+    # *****执行scenario*****
     result <- run.scenario(
       name,
       ntrial = ntrial,
-      obdc.definition = obdc.definition,
       delayed = delayed,
       delay.control = delay.control
     )
+    ## run.scenario() 将当前场景的真实 OBDC 保存为结果属性。
+    ## true.ij 是一个两列矩阵，每一行表示一个并列的最优组合 (行, 列)。
     true.ij <- attr(result, "true.obdcs")
     labels <- apply(
       true.ij,
@@ -252,19 +266,18 @@ run.comb.stein.cli <- function(
       function(ij) sprintf("(%d,%d)", ij[1], ij[2])
     )
     cat(
-      "  true OBDC(s) [",
-      obdc.definition,
-      "]: ",
+      "  true OBDC(s) [utility maximum]: ",
       paste(labels, collapse = ", "),
       "\n",
       sep = ""
     )
 
+    ## 每个场景单独保存一个 CSV 文件，便于后续单独查看。
     scenario.outfile <- file.path(
       results.dir,
       paste0(
         "comb_stein_results_",
-        obdc.definition,
+        "utility",
         if (delayed) "_tite" else "",
         "_",
         name,
@@ -273,23 +286,27 @@ run.comb.stein.cli <- function(
     )
     write.csv(result, scenario.outfile, row.names = FALSE)
     cat("  scenario results saved to", scenario.outfile, "\n")
+    ## 同时把当前场景追加到总结果表中。
     all.results <- rbind(all.results, result)
   }
 
+  ## 打印所有场景的汇总表。
   cat("\n\n===================== Table 2 simulation =====================\n")
   print(all.results, row.names = FALSE)
 
+  ## 将所有场景合并后的结果保存为一个总 CSV 文件。
   outfile <- file.path(
     results.dir,
     paste0(
       "comb_stein_results_",
-      obdc.definition,
+      "utility",
       if (delayed) "_tite" else "",
       "_all.csv"
     )
   )
   write.csv(all.results, outfile, row.names = FALSE)
   cat("\nResults saved to", outfile, "\n")
+  ## 返回结果但不自动打印一遍，方便其他 R 函数接收并继续处理。
   invisible(all.results)
 }
 
