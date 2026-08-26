@@ -60,6 +60,7 @@
   "time_to_event.R",
   "isotonic_estimators.R",
   "dose_rules.R",
+  "simulate_runin.R",
   "simulate_stein.R",
   "simulate_waterfall.R",
   "scenarios.R",
