@@ -25,7 +25,6 @@ simulate.trial.waterfall <- function(
   admissible <- matrix(TRUE, I, J)
   earlystop_tox <- FALSE
   earlystop_eff <- FALSE
-  tox_monitor_triggered <- FALSE
   time_current <- 0
   duration <- 0
 
@@ -63,8 +62,6 @@ simulate.trial.waterfall <- function(
       time_current <- timing$next_time
       duration <- timing$duration
 
-      flags <- monitor.flags(x_mat, y_mat, n_mat)
-      tox_monitor_triggered <- tox_monitor_triggered || any(flags$overtox)
       admissible <- update.admissible(x_mat, y_mat, n_mat, admissible)
 
       if (!any(admissible)) {
@@ -125,7 +122,6 @@ simulate.trial.waterfall <- function(
     n = n_mat,
     earlystop_tox = earlystop_tox,
     earlystop_eff = earlystop_eff,
-    tox_monitor_triggered = tox_monitor_triggered,
     delayed = FALSE,
     duration = duration
   )
@@ -141,7 +137,6 @@ simulate.trial.waterfall.tite <- function(pT, pE, method, delay.control) {
   admissible <- matrix(TRUE, I, J)
   earlystop_tox <- FALSE
   earlystop_eff <- FALSE
-  tox_monitor_triggered <- FALSE
   time_current <- 0
 
   row.order <- if (method == "Waterfall-L") seq_len(I) else I:1
@@ -186,13 +181,6 @@ simulate.trial.waterfall.tite <- function(pT, pE, method, delay.control) {
       interim <- tite.interim(state, decision_time, I, J, delay.control)
       time_current <- decision_time
 
-      flags <- monitor.flags(
-        interim$x,
-        interim$y,
-        interim$ess_t,
-        interim$ess_e
-      )
-      tox_monitor_triggered <- tox_monitor_triggered || any(flags$overtox)
       admissible <- update.admissible(
         interim$x,
         interim$y,
@@ -262,7 +250,6 @@ simulate.trial.waterfall.tite <- function(pT, pE, method, delay.control) {
     n = final$n,
     earlystop_tox = earlystop_tox,
     earlystop_eff = earlystop_eff,
-    tox_monitor_triggered = tox_monitor_triggered,
     delayed = TRUE,
     duration = final$duration
   )

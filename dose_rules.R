@@ -30,10 +30,15 @@ monitor.flags <- function(x_mat, y_mat, n_tox, n_eff = n_tox) {
   list(overtox = overtox, ineff = ineff)
 }
 
+## 根据场景的真实毒性率和疗效率计算真实效用矩阵。
+get.true.utility <- function(pT, pE) {
+  utility.fn(pT, pE, w1, w2, phi)
+}
+
 ## 按效用最大值识别所有真实最优生物剂量组合。
 ## 返回包含行、列索引的两列矩阵，并保留完全并列的组合。
 get.true.obdc <- function(pT, pE) {
-  utility <- utility.fn(pT, pE, w1, w2, phi)
+  utility <- get.true.utility(pT, pE)
   which(
     abs(utility - max(utility)) <= sqrt(.Machine$double.eps),
     arr.ind = TRUE
@@ -67,10 +72,10 @@ update.admissible <- function(
 ## 当前观测毒性率超过 phi 时，不允许升级。
 alt.set.C <- function(i, j, I, J, p_ij_hat) {
   candidates <- list()
-  if (p_ij_hat > phi) {
+  if (p_ij_hat > phi) {# 高毒性则候选剂量集合为2个剂量
     if (i > 1) candidates <- c(candidates, list(c(i - 1, j)))
     if (j > 1) candidates <- c(candidates, list(c(i, j - 1)))
-  } else {
+  } else {#低毒性则候选剂量集合为5个剂量
     if (i > 1) candidates <- c(candidates, list(c(i - 1, j)))
     if (j > 1) candidates <- c(candidates, list(c(i, j - 1)))
     candidates <- c(candidates, list(c(i, j)))
@@ -91,6 +96,12 @@ pick.best.by.eff <- function(cand_list, y_mat, n_mat) {
     )
     score + 1e-6 * (ij[1] + ij[2])
   })
+  cat("y_mat:\n")
+  print(y_mat)
+  cat("n_mat:\n")
+  print(n_mat)
+  cat("posterior:\n")
+  print(posterior)
   cand_list[[which.max(posterior)]]
 }
 

@@ -271,6 +271,24 @@ run.comb.stein.cli <- function(
     ## 每个场景都会调用 run.scenario()，运行 methods 中指定的方法。
     ## OBDC 始终定义为 utility 最大的组合
     cat("Running scenario", name, "with ntrial =", ntrial, "...\n")
+
+    ## 在模拟开始前打印当前场景由真实毒性率和疗效率计算的效用矩阵。
+    ## 行、列标签与剂量组合坐标 (i, j) 一致。
+    scenario.truth <- build.pTpE(name)
+    true.utility <- get.true.utility(scenario.truth$pT, scenario.truth$pE)
+    dimnames(true.utility) <- list(
+      paste0("i=", seq_len(nrow(true.utility))),
+      paste0("j=", seq_len(ncol(true.utility)))
+    )
+    cat("  true utility matrix (rows i, columns j):\n")
+    utility.display <- matrix(
+      sprintf("%.4f", true.utility),
+      nrow = nrow(true.utility),
+      ncol = ncol(true.utility),
+      dimnames = dimnames(true.utility)
+    )
+    print(utility.display, quote = FALSE)
+
     # *****执行scenario*****
     result <- run.scenario(
       name,

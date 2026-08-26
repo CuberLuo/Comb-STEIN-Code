@@ -35,12 +35,12 @@ simulate.trial.comb.stein <- function(
   earlystop_tox <- FALSE
   earlystop_eff <- FALSE
   earlystop_no_candidate <- FALSE
-  tox_monitor_triggered <- FALSE
   time_current <- 0
   duration <- 0
 
   for (cohort in seq_len(ncohort)) {
     ## 每次循环模拟一个队列，并在队列结束后进行一次剂量决策。
+    cat("current:",current,"\n")
     i <- current[1]
     j <- current[2]
 
@@ -48,23 +48,32 @@ simulate.trial.comb.stein <- function(
     ## 为队列中的每位患者随机生成毒性和疗效结局。
     tox_outcome <- as.integer(runif(cohortsize) < pT[i, j])
     eff_outcome <- as.integer(runif(cohortsize) < pE[i, j])
-    wT <- sum(tox_outcome)
-    wE <- sum(eff_outcome)
+    # cat("tox_outcome:",tox_outcome,"\n")
+    # cat("eff_outcome:",eff_outcome,"\n")
+    wT <- sum(tox_outcome)#当前cohort出现毒性的人数
+    wE <- sum(eff_outcome)#当前cohort出现疗效的人数
+    cat("wT:",wT,"\n")
+    cat("wE:",wE,"\n")
     x_mat[i, j] <- x_mat[i, j] + wT
     y_mat[i, j] <- y_mat[i, j] + wE
     n_mat[i, j] <- n_mat[i, j] + cohortsize
+    # cat("x_mat:","\n")
+    # print(x_mat)
+    # cat("y_mat:","\n")
+    # print(y_mat)
+    # cat("n_mat:","\n")
+    # print(n_mat)
     timing <- complete.cohort.timing(
       time_current, tox_outcome, eff_outcome, delay.control
     )
-    time_current <- timing$next_time
-    duration <- timing$duration
+    time_current <- timing$next_time#完成评估且下一队列可以开始入组的最早时间
+    duration <- timing$duration#当前已入组患者完成全部评估的时间
 
-    ## 使用当前累计数据计算毒性超标和疗效不足标记。
-    flags <- monitor.flags(x_mat, y_mat, n_mat)
-    tox_monitor_triggered <- tox_monitor_triggered || any(flags$overtox)
     ## 更新可接受剂量集合：超毒性组合及其右上方向可能被排除，
     ## 疗效不足的组合会被排除。
     admissible <- update.admissible(x_mat, y_mat, n_mat, admissible)
+    # cat("admissible:\n")
+    # print(admissible)
     if (!any(admissible)) {
       ## 如果没有任何可接受剂量，试验因毒性规则停止。
       earlystop_tox <- TRUE
@@ -85,11 +94,15 @@ simulate.trial.comb.stein <- function(
 
     ## Comb-STEIN 每次都在当前剂量的局部候选集合中选择下一剂量。
     p_ij_hat <- x_mat[i, j] / n_mat[i, j]
+    # 筛选1：根据当前毒性概率得到 2剂量/5剂量 局部候选集
     candidates <- alt.set.C(i, j, I, J, p_ij_hat)
+    # 筛选2：局部候选集∩可接受集
     candidates <- Filter(
       function(ij) admissible[ij[1], ij[2]],
       candidates
     )
+    cat("candidates:\n")
+    print(candidates)
     if (length(candidates) == 0) {
       if (admissible[i, j]) {
         candidates <- list(c(i, j))
@@ -118,7 +131,6 @@ simulate.trial.comb.stein <- function(
     earlystop_tox = earlystop_tox,
     earlystop_eff = earlystop_eff,
     earlystop_no_candidate = earlystop_no_candidate,
-    tox_monitor_triggered = tox_monitor_triggered,
     delayed = FALSE,
     duration = duration
   )
@@ -146,7 +158,6 @@ simulate.trial.runin.stein <- function(
   runin_path <- make.runin.path(I, J)
   path_pos <- 1
   earlystop_tox <- earlystop_eff <- earlystop_no_candidate <- FALSE
-  tox_monitor_triggered <- FALSE
   time_current <- 0
   duration <- 0
 
@@ -164,8 +175,6 @@ simulate.trial.runin.stein <- function(
     )
     time_current <- timing$next_time
     duration <- timing$duration
-    flags <- monitor.flags(x_mat, y_mat, n_mat)
-    tox_monitor_triggered <- tox_monitor_triggered || any(flags$overtox)
     admissible <- update.admissible(x_mat, y_mat, n_mat, admissible)
     if (!any(admissible)) { earlystop_tox <- TRUE; break }
     if (n_mat[i, j] >= EFF_STOP_N &&
@@ -207,7 +216,6 @@ simulate.trial.runin.stein <- function(
     sel = selected, x = x_mat, y = y_mat, n = n_mat,
     earlystop_tox = earlystop_tox, earlystop_eff = earlystop_eff,
     earlystop_no_candidate = earlystop_no_candidate,
-    tox_monitor_triggered = tox_monitor_triggered,
     delayed = FALSE, duration = duration
   )
 }
@@ -229,7 +237,6 @@ simulate.trial.comb.stein.tite <- function(pT, pE, method, delay.control) {
   earlystop_tox <- FALSE
   earlystop_eff <- FALSE
   earlystop_no_candidate <- FALSE
-  tox_monitor_triggered <- FALSE
 
   for (cohort in seq_len(ncohort)) {
     ## 入组当前队列，并按照延迟结局机制推进试验时间。
@@ -258,13 +265,6 @@ simulate.trial.comb.stein.tite <- function(pT, pE, method, delay.control) {
     time_current <- decision_time
 
     ## 用有效样本量执行与完整结局版本相同的监测和可接受性更新。
-    flags <- monitor.flags(
-      interim$x,
-      interim$y,
-      interim$ess_t,
-      interim$ess_e
-    )
-    tox_monitor_triggered <- tox_monitor_triggered || any(flags$overtox)
     admissible <- update.admissible(
       interim$x,
       interim$y,
@@ -332,7 +332,6 @@ simulate.trial.comb.stein.tite <- function(pT, pE, method, delay.control) {
     earlystop_tox = earlystop_tox,
     earlystop_eff = earlystop_eff,
     earlystop_no_candidate = earlystop_no_candidate,
-    tox_monitor_triggered = tox_monitor_triggered,
     delayed = TRUE,
     duration = final$duration
   )
@@ -354,7 +353,6 @@ simulate.trial.runin.stein.tite <- function(pT, pE, delay.control) {
   earlystop_tox <- FALSE
   earlystop_eff <- FALSE
   earlystop_no_candidate <- FALSE
-  tox_monitor_triggered <- FALSE
 
   for (cohort in seq_len(ncohort)) {
     i <- current[1]
@@ -369,10 +367,6 @@ simulate.trial.runin.stein.tite <- function(pT, pE, delay.control) {
     interim <- tite.interim(state, decision_time, I, J, delay.control)
     time_current <- decision_time
 
-    flags <- monitor.flags(
-      interim$x, interim$y, interim$ess_t, interim$ess_e
-    )
-    tox_monitor_triggered <- tox_monitor_triggered || any(flags$overtox)
     admissible <- update.admissible(
       interim$x, interim$y, interim$ess_t,
       admissible, n_eff = interim$ess_e
@@ -445,7 +439,6 @@ simulate.trial.runin.stein.tite <- function(pT, pE, delay.control) {
     earlystop_tox = earlystop_tox,
     earlystop_eff = earlystop_eff,
     earlystop_no_candidate = earlystop_no_candidate,
-    tox_monitor_triggered = tox_monitor_triggered,
     delayed = TRUE,
     duration = final$duration
   )
