@@ -19,6 +19,46 @@ normalize.delay.control <- function(control = NULL) {
   out
 }
 
+## 推进完整结局（non-TITE）设计的一个队列时间。
+## 参考 TITE-STEIN 实现中 suspension = 1 的定义：必须等当前队列
+## 所有毒性和疗效结局均已确认，才允许对下一队列作出分配决策。
+complete.cohort.timing <- function(
+  time_current,
+  tox_outcome,
+  eff_outcome,
+  control
+) {
+  cohort_size <- length(tox_outcome)
+  if (length(eff_outcome) != cohort_size) {
+    stop("tox_outcome and eff_outcome must have the same length")
+  }
+
+  if (control$accrual_random) {
+    enroll <- time_current + cumsum(
+      stats::runif(cohort_size, 0, 2 * control$accrual)
+    ) + 1
+  } else {
+    enroll <- time_current + seq.int(0, cohort_size - 1L) *
+      control$accrual + 1
+  }
+
+  ## Complete 模式只使用已确认的二元结局，不额外抽取事件发生时刻。
+  ## 这样不会改变原有完整结局模拟的随机数序列；持续时间按评估窗结束定义。
+  tox_end <- enroll + control$tox_window
+  eff_end <- enroll + control$eff_window
+
+  next_accrual <- if (control$accrual_random) {
+    max(enroll) + stats::runif(1L, 0, 2 * control$accrual) + 1
+  } else {
+    time_current + cohort_size * control$accrual + 1
+  }
+
+  list(
+    next_time = max(next_accrual, tox_end, eff_end),
+    duration = max(tox_end, eff_end)
+  )
+}
+
 ## 创建时间到事件试验的空患者级状态表。
 new.tite.state <- function() {
   data.frame(

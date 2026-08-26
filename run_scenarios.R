@@ -6,23 +6,23 @@ run.scenario <- function(
   name,
   ntrial = DEFAULT_NTRIAL,
   delayed = FALSE,
-  delay.control = NULL
-) {
-  delayed <- isTRUE(delayed)
-  if (delayed) delay.control <- normalize.delay.control(delay.control)
-
-  scenario <- build.pTpE(name)
-  pT <- scenario$pT
-  pE <- scenario$pE
-  true.ij <- get.true.obdc(pT, pE)
-
-  methods <- c(
+  delay.control = NULL,
+  methods = c(
     "Comb-STEIN-L",
     "Comb-STEIN-H",
     "Runin-STEIN",
     "Waterfall-L",
     "Waterfall-H"
   )
+) {
+  delayed <- isTRUE(delayed)
+  delay.control <- normalize.delay.control(delay.control)
+
+  scenario <- build.pTpE(name)
+  pT <- scenario$pT
+  pE <- scenario$pE
+  true.ij <- get.true.obdc(pT, pE)
+
   out <- data.frame(
     Scenario = name,
     Method = methods,
@@ -85,7 +85,7 @@ run.scenario <- function(
       ## x：每个剂量组合观察到的毒性事件数；
       ## sel：试验结束时选择的剂量组合；
       ## earlystop_tox / earlystop_eff：是否因毒性/疗效原因提前停止；
-      ## duration：TITE 延迟结局模式下的试验持续时间。
+      ## duration：完整结局或 TITE 模式下的试验持续时间。
       total.n <- sum(result$n)
 
       ## 累加当前试验的总样本量和总毒性事件数。
@@ -100,7 +100,7 @@ run.scenario <- function(
       if (result$earlystop_eff) {
         efficacy.stop.count <- efficacy.stop.count + 1
       }
-      if (delayed) duration.sum <- duration.sum + result$duration
+      duration.sum <- duration.sum + result$duration
 
       ## 判断最终选中的组合是否属于真实 utility 最大的 OBDC。
       ## true.ij 可能包含多个并列最优组合，因此逐行比较；
@@ -131,7 +131,7 @@ run.scenario <- function(
     ## Sample：平均入组人数；
     ## DLTs：平均毒性事件数；
     ## Tox / Eff：因毒性/疗效提前停止的试验百分比；
-    ## Duration：TITE 模式下的平均试验持续时间。
+    ## Duration：平均试验持续时间（天）。
     row <- out$Method == method
     out[row, "Selection"] <- round(100 * selection.count / ntrial, 1)
     out[row, "Patient"] <- round(patient.percent.sum / ntrial, 1)
@@ -139,9 +139,7 @@ run.scenario <- function(
     out[row, "DLTs"] <- round(dlt.sum / ntrial, 1)
     out[row, "Tox"] <- round(100 * toxicity.stop.count / ntrial, 1)
     out[row, "Eff"] <- round(100 * efficacy.stop.count / ntrial, 1)
-    if (delayed) {
-      out[row, "Duration"] <- round(duration.sum / ntrial, 1)
-    }
+    out[row, "Duration"] <- round(duration.sum / ntrial, 1)
   }
 
   ## 将真实 OBDC 和延迟设置作为属性附加到结果表。
@@ -149,6 +147,6 @@ run.scenario <- function(
   ## 但它们不会被当作普通数据列写入汇总表。
   attr(out, "true.obdcs") <- true.ij
   attr(out, "delayed") <- delayed
-  if (delayed) attr(out, "delay.control") <- delay.control
+  attr(out, "delay.control") <- delay.control
   out
 }

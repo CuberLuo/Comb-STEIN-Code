@@ -206,9 +206,23 @@ run.comb.stein.cli <- function(
         .parse.cli.boolean(pulled$value, paste0("--", option))
     }
   }
-  if (delayed) {
-    ## 补齐用户未指定的延迟参数。
-    delay.control <- normalize.delay.control(delay.control)
+  ## Complete 和 TITE 都使用同一套入组速度与评估窗计算试验持续时间。
+  delay.control <- normalize.delay.control(delay.control)
+
+  ## 读取要运行的方法。多个方法使用逗号分隔。
+  methods.flag <- .pull.cli.option(args, "methods", NULL)
+  args <- methods.flag$args
+  methods <- c(
+    "Comb-STEIN-L",
+    "Comb-STEIN-H",
+    "Runin-STEIN",
+    "Waterfall-L",
+    "Waterfall-H"
+  )
+  if (!is.null(methods.flag$value)) {
+    methods <- trimws(
+      strsplit(methods.flag$value, ",", fixed = TRUE)[[1]]
+    )
   }
 
   ## 默认运行 scenarios.R 中定义的全部场景。
@@ -239,15 +253,22 @@ run.comb.stein.cli <- function(
       if (delay.control$use_suspension) "ON" else "OFF"
     ))
   } else {
-    cat("Delayed outcomes: OFF (complete outcomes used at each decision)\n")
+    cat(sprintf(
+      paste0(
+        "Delayed outcomes: OFF (complete outcomes used at each decision; ",
+        "accrual %.1f days, toxicity window %.1f days, efficacy window %.1f days)\n"
+      ),
+      delay.control$accrual,
+      delay.control$tox_window,
+      delay.control$eff_window
+    ))
   }
 
   ## 用于保存所有场景的汇总结果。
   all.results <- NULL
 
   for (name in scenarios.to.run) {
-    ## 每个场景都会调用 run.scenario()，该函数会依次模拟五种方法：
-    ## Comb-STEIN-L、Comb-STEIN-H、Runin-STEIN、Waterfall-L、Waterfall-H。
+    ## 每个场景都会调用 run.scenario()，运行 methods 中指定的方法。
     ## OBDC 始终定义为 utility 最大的组合
     cat("Running scenario", name, "with ntrial =", ntrial, "...\n")
     # *****执行scenario*****
@@ -255,7 +276,8 @@ run.comb.stein.cli <- function(
       name,
       ntrial = ntrial,
       delayed = delayed,
-      delay.control = delay.control
+      delay.control = delay.control,
+      methods = methods
     )
     ## run.scenario() 将当前场景的真实 OBDC 保存为结果属性。
     ## true.ij 是一个两列矩阵，每一行表示一个并列的最优组合 (行, 列)。

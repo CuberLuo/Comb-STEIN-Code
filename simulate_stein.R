@@ -1,5 +1,5 @@
 ## 使用完整或延迟数据模拟一次 Comb-STEIN 试验。
-## 返回分配计数、结局、选定组合、停止指标，以及（延迟数据时的）试验时长。
+## 返回分配计数、结局、选定组合、停止指标和试验时长。
 simulate.trial.comb.stein <- function(
   pT,
   pE,
@@ -17,6 +17,7 @@ simulate.trial.comb.stein <- function(
       normalize.delay.control(delay.control)
     ))
   }
+  delay.control <- normalize.delay.control(delay.control)
   ## I、J 是剂量网格的行数和列数。
   ## 每个剂量组合预计入组 COHORTS_PER_COMBINATION 个队列，
   ## 因此总队列数由剂量组合数量决定。
@@ -35,6 +36,8 @@ simulate.trial.comb.stein <- function(
   earlystop_eff <- FALSE
   earlystop_no_candidate <- FALSE
   tox_monitor_triggered <- FALSE
+  time_current <- 0
+  duration <- 0
 
   for (cohort in seq_len(ncohort)) {
     ## 每次循环模拟一个队列，并在队列结束后进行一次剂量决策。
@@ -43,11 +46,18 @@ simulate.trial.comb.stein <- function(
 
     ## 根据当前剂量组合真实的毒性率和疗效率，
     ## 为队列中的每位患者随机生成毒性和疗效结局。
-    wT <- sum(runif(cohortsize) < pT[i, j])
-    wE <- sum(runif(cohortsize) < pE[i, j])
+    tox_outcome <- as.integer(runif(cohortsize) < pT[i, j])
+    eff_outcome <- as.integer(runif(cohortsize) < pE[i, j])
+    wT <- sum(tox_outcome)
+    wE <- sum(eff_outcome)
     x_mat[i, j] <- x_mat[i, j] + wT
     y_mat[i, j] <- y_mat[i, j] + wE
     n_mat[i, j] <- n_mat[i, j] + cohortsize
+    timing <- complete.cohort.timing(
+      time_current, tox_outcome, eff_outcome, delay.control
+    )
+    time_current <- timing$next_time
+    duration <- timing$duration
 
     ## 使用当前累计数据计算毒性超标和疗效不足标记。
     flags <- monitor.flags(x_mat, y_mat, n_mat)
@@ -110,7 +120,7 @@ simulate.trial.comb.stein <- function(
     earlystop_no_candidate = earlystop_no_candidate,
     tox_monitor_triggered = tox_monitor_triggered,
     delayed = FALSE,
-    duration = NA_real_
+    duration = duration
   )
 }
 
@@ -126,6 +136,7 @@ simulate.trial.runin.stein <- function(
       pT, pE, normalize.delay.control(delay.control)
     ))
   }
+  delay.control <- normalize.delay.control(delay.control)
   I <- nrow(pT)
   J <- ncol(pT)
   ncohort <- I * J * COHORTS_PER_COMBINATION
@@ -136,14 +147,23 @@ simulate.trial.runin.stein <- function(
   path_pos <- 1
   earlystop_tox <- earlystop_eff <- earlystop_no_candidate <- FALSE
   tox_monitor_triggered <- FALSE
+  time_current <- 0
+  duration <- 0
 
   for (cohort in seq_len(ncohort)) {
     i <- current[1]; j <- current[2]
-    wT <- sum(runif(cohortsize) < pT[i, j])
-    wE <- sum(runif(cohortsize) < pE[i, j])
+    tox_outcome <- as.integer(runif(cohortsize) < pT[i, j])
+    eff_outcome <- as.integer(runif(cohortsize) < pE[i, j])
+    wT <- sum(tox_outcome)
+    wE <- sum(eff_outcome)
     x_mat[i, j] <- x_mat[i, j] + wT
     y_mat[i, j] <- y_mat[i, j] + wE
     n_mat[i, j] <- n_mat[i, j] + cohortsize
+    timing <- complete.cohort.timing(
+      time_current, tox_outcome, eff_outcome, delay.control
+    )
+    time_current <- timing$next_time
+    duration <- timing$duration
     flags <- monitor.flags(x_mat, y_mat, n_mat)
     tox_monitor_triggered <- tox_monitor_triggered || any(flags$overtox)
     admissible <- update.admissible(x_mat, y_mat, n_mat, admissible)
@@ -188,7 +208,7 @@ simulate.trial.runin.stein <- function(
     earlystop_tox = earlystop_tox, earlystop_eff = earlystop_eff,
     earlystop_no_candidate = earlystop_no_candidate,
     tox_monitor_triggered = tox_monitor_triggered,
-    delayed = FALSE, duration = NA_real_
+    delayed = FALSE, duration = duration
   )
 }
 

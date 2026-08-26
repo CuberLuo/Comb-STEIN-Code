@@ -1,7 +1,7 @@
 ## 简化的逐行 Waterfall 对照方法。
 
 ## 使用完整或延迟结局模拟一次逐行 Waterfall 试验。
-## 返回分配计数、结局、选定组合、停止指标，以及（延迟数据时的）试验时长。
+## 返回分配计数、结局、选定组合、停止指标和试验时长。
 simulate.trial.waterfall <- function(
   pT,
   pE,
@@ -17,6 +17,7 @@ simulate.trial.waterfall <- function(
       normalize.delay.control(delay.control)
     ))
   }
+  delay.control <- normalize.delay.control(delay.control)
   I <- nrow(pT)
   J <- ncol(pT)
   ncohort <- I * J * COHORTS_PER_COMBINATION
@@ -25,6 +26,8 @@ simulate.trial.waterfall <- function(
   earlystop_tox <- FALSE
   earlystop_eff <- FALSE
   tox_monitor_triggered <- FALSE
+  time_current <- 0
+  duration <- 0
 
   row.order <- if (method == "Waterfall-L") seq_len(I) else I:1
   start.col <- if (method == "Waterfall-L") 1 else J
@@ -47,11 +50,18 @@ simulate.trial.waterfall <- function(
 
     for (k in seq_len(n.this.row)) {
       cohort.count <- cohort.count + 1
-      wT <- sum(runif(cohortsize) < pT[i, j])
-      wE <- sum(runif(cohortsize) < pE[i, j])
+      tox_outcome <- as.integer(runif(cohortsize) < pT[i, j])
+      eff_outcome <- as.integer(runif(cohortsize) < pE[i, j])
+      wT <- sum(tox_outcome)
+      wE <- sum(eff_outcome)
       x_mat[i, j] <- x_mat[i, j] + wT
       y_mat[i, j] <- y_mat[i, j] + wE
       n_mat[i, j] <- n_mat[i, j] + cohortsize
+      timing <- complete.cohort.timing(
+        time_current, tox_outcome, eff_outcome, delay.control
+      )
+      time_current <- timing$next_time
+      duration <- timing$duration
 
       flags <- monitor.flags(x_mat, y_mat, n_mat)
       tox_monitor_triggered <- tox_monitor_triggered || any(flags$overtox)
@@ -117,7 +127,7 @@ simulate.trial.waterfall <- function(
     earlystop_eff = earlystop_eff,
     tox_monitor_triggered = tox_monitor_triggered,
     delayed = FALSE,
-    duration = NA_real_
+    duration = duration
   )
 }
 
