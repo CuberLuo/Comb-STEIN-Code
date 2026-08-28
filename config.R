@@ -10,6 +10,16 @@ if (!requireNamespace("rjags", quietly = TRUE)) {
 DEFAULT_SEED <- 2026
 DEFAULT_NTRIAL <- 1L#试验次数
 
+## 中间调试输出统一通过这两个函数控制。
+## 默认保留调试信息；命令行添加 --quiet 后关闭。
+debug.cat <- function(...) {
+  if (!isTRUE(getOption("comb.stein.quiet", FALSE))) cat(...)
+}
+
+debug.print <- function(x, ...) {
+  if (!isTRUE(getOption("comb.stein.quiet", FALSE))) print(x, ...)
+}
+
 ## TITE-STEIN 使用的时间到事件设置（Sun 等，2025）。
 ## 时间单位为天。延迟结局需要显式开启，因此原有的完整结局模拟仍是默认行为。
 DEFAULT_DELAY_CONTROL <- list(

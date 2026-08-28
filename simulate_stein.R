@@ -40,7 +40,7 @@ simulate.trial.comb.stein <- function(
 
   for (cohort in seq_len(ncohort)) {
     ## 每次循环模拟一个队列，并在队列结束后进行一次剂量决策。
-    cat("current:",current,"\n")
+    debug.cat("current:", current, "\n")
     i <- current[1]
     j <- current[2]
 
@@ -52,8 +52,8 @@ simulate.trial.comb.stein <- function(
     # cat("eff_outcome:",eff_outcome,"\n")
     wT <- sum(tox_outcome)#当前cohort出现毒性的人数
     wE <- sum(eff_outcome)#当前cohort出现疗效的人数
-    cat("wT:",wT,"\n")
-    cat("wE:",wE,"\n")
+    debug.cat("wT:", wT, "\n")
+    debug.cat("wE:", wE, "\n")
     x_mat[i, j] <- x_mat[i, j] + wT
     y_mat[i, j] <- y_mat[i, j] + wE
     n_mat[i, j] <- n_mat[i, j] + cohortsize
@@ -101,8 +101,8 @@ simulate.trial.comb.stein <- function(
       function(ij) admissible[ij[1], ij[2]],
       candidates
     )
-    cat("candidates:\n")
-    print(candidates)
+    debug.cat("candidates:\n")
+    debug.print(candidates)
     if (length(candidates) == 0) {
       if (admissible[i, j]) {
         candidates <- list(c(i, j))

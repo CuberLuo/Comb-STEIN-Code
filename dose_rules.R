@@ -96,12 +96,12 @@ pick.best.by.eff <- function(cand_list, y_mat, n_mat) {
     )
     score + 1e-6 * (ij[1] + ij[2])
   })
-  cat("y_mat:\n")
-  print(y_mat)
-  cat("n_mat:\n")
-  print(n_mat)
-  cat("posterior:\n")
-  print(posterior)
+  debug.cat("y_mat:\n")
+  debug.print(y_mat)
+  debug.cat("n_mat:\n")
+  debug.print(n_mat)
+  debug.cat("posterior:\n")
+  debug.print(posterior)
   cand_list[[which.max(posterior)]]
 }
 

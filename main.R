@@ -6,6 +6,7 @@
 ##   Rscript main.R S1 50 --delayed=true
 ##   Rscript main.R S1 50 --tite --accrual=10 --tox-window=30
 ##     --eff-window=90 --suspension=0.5
+##   Rscript main.R S1 50 --quiet
 ##
 ## 每次命令行运行都会在 output 下创建新的时间戳文件夹，
 
@@ -142,6 +143,18 @@ run.comb.stein.cli <- function(
     dir.create(results.dir, showWarnings = FALSE, recursive = TRUE)
     results.dir <- normalizePath(results.dir, mustWork = TRUE)
   }
+
+  ## --quiet 只关闭模拟过程中的中间调试信息，
+  ## 不影响运行摘要、utility 矩阵或最终结果表。
+  quiet.flag <- .pull.cli.option(args, "quiet", NULL)
+  args <- quiet.flag$args
+  quiet <- !is.null(quiet.flag$value) &&
+    .parse.cli.boolean(quiet.flag$value, "--quiet")
+  if ("--quiet" %in% args) {
+    quiet <- TRUE
+    args <- args[args != "--quiet"]
+  }
+  options(comb.stein.quiet = quiet)
 
   ## 固定随机种子，使同样的参数能够得到可重复的模拟结果。
   set.seed(DEFAULT_SEED)
