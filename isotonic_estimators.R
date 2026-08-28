@@ -1,13 +1,10 @@
 ## Cai、Yuan 和 Ji（2014）及 Comb-BOIN12 使用的贝叶斯二次逻辑回归疗效估计器：
 ##
 ##   logit(q[i,j]) = gamma[1] + gamma[2] * a[i] + gamma[3] * b[j]
-##                   + gamma[4] * a[i]^2 + gamma[5] * b[j]^2
-##                   + gamma[6] * a[i] * b[j].
+##                   + gamma[4] * a[i]^2 + gamma[5] * b[j]^2.
 ##
 ## 剂量得分 a 和 b 标准化为均值 0、标准差 0.5。
-## 交互项补全二阶响应面，使疗效峰值可以随另一个药物的剂量变化而移动。
-## 层级化的剂量单元偏差可以避免全局二次曲面对局部组合效应过度平滑。
-## 数据稀疏时这些偏差会收缩到 0；数据充足时则可以恢复局部峰值。
+## 模型仅保留两个药物的主效应和平方项，不包含交互项或剂量单元偏差。
 
 .efficacy_fit_cache <- new.env(parent = emptyenv())
 
@@ -90,23 +87,19 @@ eff.estimate <- function(
     agent_a = rep(a, times = J),
     agent_b = rep(b, each = I),
     agent_a_sq = rep(a^2, times = J),
-    agent_b_sq = rep(b^2, each = I),
-    agent_a_by_b = rep(a, times = J) * rep(b, each = I)
+    agent_b_sq = rep(b^2, each = I)
   )
 
   model.text <- "
     model {
       for (d in 1:N) {
         y[d] ~ dbin(q[d], n[d])
-        logit(q[d]) <- inprod(gamma[1:6], X[d, 1:6]) + delta[d]
-        delta[d] ~ dnorm(0, tau_delta)
+        logit(q[d]) <- inprod(gamma[1:5], X[d, 1:5])
       }
       gamma[1] ~ dt(0, 0.01, 1)
-      for (k in 2:6) {
+      for (k in 2:5) {
         gamma[k] ~ dt(0, 0.16, 1)
       }
-      sigma_delta ~ dunif(0.05, 2.5)
-      tau_delta <- pow(sigma_delta, -2)
     }
   "
 
@@ -116,9 +109,7 @@ eff.estimate <- function(
       ((base.seed - 1 + (chain - 1) * 104729) %% 2147483646) + 1
     )
     list(
-      gamma = rep(0, 6),
-      delta = rep(0, length(y_mat)),
-      sigma_delta = 0.5,
+      gamma = rep(0, 5),
       .RNG.name = "base::Wichmann-Hill",
       .RNG.seed = chain.seed
     )
