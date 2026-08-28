@@ -48,8 +48,8 @@ simulate.trial.comb.stein <- function(
     ## 为队列中的每位患者随机生成毒性和疗效结局。
     tox_outcome <- as.integer(runif(cohortsize) < pT[i, j])
     eff_outcome <- as.integer(runif(cohortsize) < pE[i, j])
-    # cat("tox_outcome:",tox_outcome,"\n")
-    # cat("eff_outcome:",eff_outcome,"\n")
+    # debug.cat("tox_outcome:",tox_outcome,"\n")
+    # debug.cat("eff_outcome:",eff_outcome,"\n")
     wT <- sum(tox_outcome)#当前cohort出现毒性的人数
     wE <- sum(eff_outcome)#当前cohort出现疗效的人数
     debug.cat("wT:", wT, "\n")
@@ -57,12 +57,12 @@ simulate.trial.comb.stein <- function(
     x_mat[i, j] <- x_mat[i, j] + wT
     y_mat[i, j] <- y_mat[i, j] + wE
     n_mat[i, j] <- n_mat[i, j] + cohortsize
-    # cat("x_mat:","\n")
-    # print(x_mat)
-    # cat("y_mat:","\n")
-    # print(y_mat)
-    # cat("n_mat:","\n")
-    # print(n_mat)
+    # debug.cat("x_mat:","\n")
+    # debug.print(x_mat)
+    # debug.cat("y_mat:","\n")
+    # debug.print(y_mat)
+    # debug.cat("n_mat:","\n")
+    # debug.print(n_mat)
     timing <- complete.cohort.timing(
       time_current, tox_outcome, eff_outcome, delay.control
     )

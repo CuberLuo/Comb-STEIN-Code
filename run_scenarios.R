@@ -7,6 +7,7 @@ run.scenario <- function(
   ntrial = DEFAULT_NTRIAL,
   delayed = FALSE,
   delay.control = NULL,
+  workers = DEFAULT_WORKERS,
   methods = c(
     "Comb-STEIN-L",
     "Comb-STEIN-H",
@@ -36,6 +37,88 @@ run.scenario <- function(
     Duration = NA
   )
 
+  ## 将“方法 × 重复试验”展开为独立任务并行执行。每个 future
+  ## 在独立 R 进程中维护自己的随机数流和 JAGS/cache 状态，主进程
+  ## 仅在全部任务完成后聚合结果，因此不会发生共享计数器竞争。
+  tasks <- expand.grid(
+    method = methods,
+    trial = seq_len(ntrial),
+    KEEP.OUT.ATTRS = FALSE,
+    stringsAsFactors = FALSE
+  )
+  quiet <- isTRUE(getOption("comb.stein.quiet", FALSE))
+  task.fun <- function(task) {
+    ## multisession worker 不继承主进程 options，显式同步调试开关。
+    options(comb.stein.quiet = quiet)
+    method <- task$method[[1]]
+    trial <- as.integer(task$trial[[1]])
+    result <- tryCatch(
+      switch(
+        method,
+        "Comb-STEIN-L" = simulate.trial.comb.stein(
+          pT, pE, "CombSTEIN-L", delayed, delay.control
+        ),
+        "Comb-STEIN-H" = simulate.trial.comb.stein(
+          pT, pE, "CombSTEIN-H", delayed, delay.control
+        ),
+        "Runin-STEIN" = simulate.trial.runin.stein(
+          pT, pE, delayed, delay.control
+        ),
+        "Waterfall-L" = simulate.trial.waterfall(
+          pT, pE, "Waterfall-L", delayed, delay.control
+        ),
+        "Waterfall-H" = simulate.trial.waterfall(
+          pT, pE, "Waterfall-H", delayed, delay.control
+        ),
+        stop(sprintf("Unknown method: %s", method), call. = FALSE)
+      ),
+      error = function(err) {
+        stop(
+          sprintf(
+            "Scenario %s, method %s, trial %d failed: %s",
+            name,
+            method,
+            trial,
+            conditionMessage(err)
+          ),
+          call. = FALSE
+        )
+      }
+    )
+    list(method = method, trial = trial, result = result)
+  }
+
+  if (is.null(workers)) {
+    workers <- max(1L, parallel::detectCores(logical = TRUE) - 1L)
+  }
+  previous.plan <- future::plan()
+  on.exit(future::plan(previous.plan), add = TRUE)
+  future::plan(future::multisession, workers = workers)
+  task.results <- progressr::with_progress(
+    {
+      progress <- progressr::progressor(steps = nrow(tasks))
+      future.apply::future_lapply(
+        seq_len(nrow(tasks)),
+        function(index) {
+          task <- tasks[index, , drop = FALSE]
+          result <- task.fun(task)
+          progress(message = sprintf(
+            "%s, trial %d/%d",
+            task$method[[1]],
+            task$trial[[1]],
+            ntrial
+          ))
+          result
+        },
+        future.seed = TRUE,
+        future.packages = "rjags"
+      )
+    },
+    handlers = progressr::handler_txtprogressbar,
+    ## --quiet 只控制模拟过程中的调试信息；进度条始终保持启用。
+    enable = TRUE
+  )
+
   for (method in methods) {
     selection.count <- 0
     patient.percent.sum <- 0
@@ -45,40 +128,12 @@ run.scenario <- function(
     efficacy.stop.count <- 0
     duration.sum <- 0
 
-    # 进行独立的ntrial次试验，每次试验运行5种方法
-    for (trial in seq_len(ntrial)) {
-      result <- tryCatch(
-        switch(
-          method,
-          "Comb-STEIN-L" = simulate.trial.comb.stein(
-            pT, pE, "CombSTEIN-L", delayed, delay.control
-          ),
-          "Comb-STEIN-H" = simulate.trial.comb.stein(
-            pT, pE, "CombSTEIN-H", delayed, delay.control
-          ),
-          "Runin-STEIN" = simulate.trial.runin.stein(
-            pT, pE, delayed, delay.control
-          ),
-          "Waterfall-L" = simulate.trial.waterfall(
-            pT, pE, "Waterfall-L", delayed, delay.control
-          ),
-          "Waterfall-H" = simulate.trial.waterfall(
-            pT, pE, "Waterfall-H", delayed, delay.control
-          )
-        ),
-        error = function(err) {
-          stop(
-            sprintf(
-              "Scenario %s, method %s, trial %d failed: %s",
-              name,
-              method,
-              trial,
-              conditionMessage(err)
-            ),
-            call. = FALSE
-          )
-        }
-      )
+    method.results <- Filter(
+      function(task) identical(task$method, method),
+      task.results
+    )
+    for (task in method.results) {
+      result <- task$result
 
       ## result 是一次试验的完整输出，主要包含：
       ## n：每个剂量组合实际入组的患者数；

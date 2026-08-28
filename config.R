@@ -1,14 +1,9 @@
-if (!requireNamespace("Iso", quietly = TRUE)) {
-  stop("Package 'Iso' is required. Install it with install.packages('Iso').")
-}
-if (!requireNamespace("rjags", quietly = TRUE)) {
-  stop(
-    "Package 'rjags' is required. Install JAGS first, then install.packages('rjags')."
-  )
-}
-
 DEFAULT_SEED <- 2026
 DEFAULT_NTRIAL <- 1L#试验次数
+
+## 并行 worker 数。NULL 表示自动使用可用 CPU 核数减一，
+## 至少保留一个 worker；可由 run.scenario(workers=) 或 --workers= 覆盖。
+DEFAULT_WORKERS <- NULL
 
 ## 中间调试输出统一通过这两个函数控制。
 ## 默认保留调试信息；命令行添加 --quiet 后关闭。

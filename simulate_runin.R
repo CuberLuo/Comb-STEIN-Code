@@ -20,6 +20,7 @@ simulate.trial.runin.stein <- function(
   admissible <- matrix(TRUE, I, J)
   current <- c(1, 1)
   runin_path <- make.runin.path(I, J)
+  debug.print(runin_path)
   path_pos <- 1
   earlystop_tox <- earlystop_eff <- earlystop_no_candidate <- FALSE
   time_current <- 0
@@ -48,6 +49,7 @@ simulate.trial.runin.stein <- function(
     if (cohort == ncohort) break
 
     p_ij_hat <- x_mat[i, j] / n_mat[i, j]
+    # 前 RUNIN_COHORTS 个队列使用 run-in 路径
     if (cohort < RUNIN_COHORTS) {
       if (path_pos < length(runin_path)) path_pos <- path_pos + 1L
       next_dose <- runin_path[[path_pos]]

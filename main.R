@@ -6,6 +6,7 @@
 ##   Rscript main.R S1 50 --delayed=true
 ##   Rscript main.R S1 50 --tite --accrual=10 --tox-window=30
 ##     --eff-window=90 --suspension=0.5
+##   Rscript main.R S1 50 --workers=4
 ##   Rscript main.R S1 50 --quiet
 ##
 ## 每次命令行运行都会在 output 下创建新的时间戳文件夹，
@@ -168,6 +169,12 @@ run.comb.stein.cli <- function(
   ## 默认每个场景重复的试验次数。
   ## 如果命令行中提供了数字，后面会用该数字覆盖默认值。
   ntrial <- DEFAULT_NTRIAL
+  workers <- DEFAULT_WORKERS
+  workers.flag <- .pull.cli.option(args, "workers", NULL)
+  args <- workers.flag$args
+  if (!is.null(workers.flag$value)) {
+    workers <- as.integer(workers.flag$value)
+  }
 
   ## delayed = FALSE 表示使用完整结局；
   ## delayed = TRUE 表示启用 TITE/延迟结局模拟。
@@ -309,6 +316,7 @@ run.comb.stein.cli <- function(
       ntrial = ntrial,
       delayed = delayed,
       delay.control = delay.control,
+      workers = workers,
       methods = methods
     )
     ## run.scenario() 将当前场景的真实 OBDC 保存为结果属性。
