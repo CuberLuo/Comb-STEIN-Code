@@ -31,7 +31,11 @@ simulate.trial.comb.stein <- function(
 
   ## CombSTEIN-H 从最高剂量开始，CombSTEIN-L 从最低剂量开始。
   ## current 保存当前剂量组合的行、列坐标。
-  current <- if (method == "CombSTEIN-H") c(I, J) else c(1, 1)
+  current <- if (method == "CombSTEIN-H") {
+    c(I, J)
+  } else {
+    c(1, 1)
+  }
   earlystop_tox <- FALSE
   earlystop_eff <- FALSE
   earlystop_no_candidate <- FALSE
@@ -114,8 +118,6 @@ simulate.trial.comb.stein <- function(
     current <- pick.best.by.eff(candidates, y_mat, n_mat)
   }
 
-  ## 只有正常完成试验时才进行最终剂量选择；
-  ## 因毒性或无候选组合停止时，不报告最终选择。
   selected <- if (earlystop_tox || earlystop_no_candidate) {
     c(NA_integer_, NA_integer_)
   } else {
@@ -148,7 +150,11 @@ simulate.trial.comb.stein.tite <- function(pT, pE, method, delay.control) {
   state <- new.tite.state()
   admissible <- matrix(TRUE, I, J)
   ## H 版本从最高剂量开始，L 版本从最低剂量开始。
-  current <- if (method == "CombSTEIN-H") c(I, J) else c(1, 1)
+  current <- if (method == "CombSTEIN-H") {
+    c(I, J)
+  } else {
+    c(1, 1)
+  }
   time_current <- 0
   earlystop_tox <- FALSE
   earlystop_eff <- FALSE
@@ -231,8 +237,6 @@ simulate.trial.comb.stein.tite <- function(pT, pE, method, delay.control) {
 
   ## 试验结束后，将所有患者的最终随访结果整理成完整计数矩阵。
   final <- tite.final.counts(state, I, J)
-  ## 与完整结局版本一致：异常停止时不报告最终选择，
-  ## 正常结束时根据最终完整数据选择 utility 最大的可接受组合。
   selected <- if (earlystop_tox || earlystop_no_candidate) {
     c(NA_integer_, NA_integer_)
   } else {

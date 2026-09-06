@@ -107,7 +107,12 @@ pick.best.by.eff <- function(cand_list, y_mat, n_mat) {
 
 ## 在已治疗且可接受的组合中选择拟合效用最大的最终组合。
 ## 返回 c(row, column)；没有符合条件的组合时返回两个 NA 整数。
-final.selection <- function(x_mat, y_mat, n_mat, admissible) {
+final.selection <- function(
+  x_mat,
+  y_mat,
+  n_mat,
+  admissible
+) {
   eligible <- admissible & n_mat > 0
   if (!any(eligible)) return(c(NA_integer_, NA_integer_))
 
@@ -120,29 +125,29 @@ final.selection <- function(x_mat, y_mat, n_mat, admissible) {
   if (all(!is.finite(utility))) {
     return(c(NA_integer_, NA_integer_))
   }
-  selected <- which(utility == max(utility), arr.ind = TRUE)
-  selected[1, ]
+  which(utility == max(utility), arr.ind = TRUE)[1, ]
 }
 
-## 构造入组阶段使用的行列交替升级路径。
+## 构造入组阶段使用的行优先、列交替升级路径。
+## 先覆盖两个剂量方向，再沿对角区域扩展，有利于探索非单调疗效。
 ## 返回列表中最多包含 `ncohort` 个整数索引对。
 make.runin.path <- function(I, J, ncohort = RUNIN_COHORTS) {
   path <- list(c(1L, 1L))
   current <- c(1L, 1L)
-  prefer_col <- TRUE
+  prefer_row <- TRUE
 
   while (length(path) < ncohort && (current[1] < I || current[2] < J)) {
-    if (prefer_col && current[2] < J) {
-      current[2] <- current[2] + 1L
-    } else if (!prefer_col && current[1] < I) {
+    if (prefer_row && current[1] < I) {
       current[1] <- current[1] + 1L
+    } else if (!prefer_row && current[2] < J) {
+      current[2] <- current[2] + 1L
     } else if (current[2] < J) {
       current[2] <- current[2] + 1L
     } else {
       current[1] <- current[1] + 1L
     }
     path[[length(path) + 1L]] <- current
-    prefer_col <- !prefer_col
+    prefer_row <- !prefer_row
   }
   path
 }
