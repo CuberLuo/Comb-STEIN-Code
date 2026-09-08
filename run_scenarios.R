@@ -11,9 +11,7 @@ run.scenario <- function(
   methods = c(
     "Comb-STEIN-L",
     "Comb-STEIN-H",
-    "Runin-STEIN",
-    "Waterfall-L",
-    "Waterfall-H"
+    "Runin-STEIN"
   )
 ) {
   delayed <- isTRUE(delayed)
@@ -63,12 +61,6 @@ run.scenario <- function(
         ),
         "Runin-STEIN" = simulate.trial.runin.stein(
           pT, pE, delayed, delay.control
-        ),
-        "Waterfall-L" = simulate.trial.waterfall(
-          pT, pE, "Waterfall-L", delayed, delay.control
-        ),
-        "Waterfall-H" = simulate.trial.waterfall(
-          pT, pE, "Waterfall-H", delayed, delay.control
         ),
         stop(sprintf("Unknown method: %s", method), call. = FALSE)
       ),

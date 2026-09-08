@@ -28,9 +28,9 @@ DEFAULT_DELAY_CONTROL <- list(
   eff_distribution = "uniform"
 )
 
-## 设计参数（论文第 3 节）。
-phi0 <- 0.3
-phi1 <- 0.5
+## 设计参数
+phi1 <- 0.3
+phi2 <- 0.5
 psi1 <- 0.3
 psi2 <- 0.8
 Tthresh <- 0.8
@@ -50,10 +50,10 @@ EFF_MCMC_SAMPLES <- 2000L
 EFF_MCMC_CHAINS <- 2L
 EFF_MCMC_THIN <- 1L
 
-## 根据可接受（`phi0`）和不可接受（`phi1`）的毒性概率推导毒性决策边界。
-calc.phi <- function(phi0, phi1) {
-  log((1 - phi0) / (1 - phi1)) /
-    log(phi1 * (1 - phi0) / (phi0 * (1 - phi1)))
+## 根据可接受（`phi1`）和不可接受（`phi2`）的毒性概率推导毒性决策边界。
+calc.phi <- function(phi1, phi2) {
+  log((1 - phi1) / (1 - phi2)) /
+    log(phi2 * (1 - phi1) / (phi1 * (1 - phi2)))
 }
 
 ## 根据不可接受（`psi1`）和理想（`psi2`）的疗效概率推导疗效决策边界。
@@ -62,5 +62,5 @@ calc.psi <- function(psi1, psi2) {
     log(psi2 * (1 - psi1) / (psi1 * (1 - psi2)))
 }
 
-phi <- calc.phi(phi0, phi1)
+phi <- calc.phi(phi1, phi2)
 psi <- calc.psi(psi1, psi2)

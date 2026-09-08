@@ -64,7 +64,6 @@
   "dose_rules.R",
   "simulate_runin.R",
   "simulate_stein.R",
-  "simulate_waterfall.R",
   "scenarios.R",
   "run_scenarios.R"
 )
@@ -236,9 +235,7 @@ run.comb.stein.cli <- function(
   methods <- c(
     "Comb-STEIN-L",
     "Comb-STEIN-H",
-    "Runin-STEIN",
-    "Waterfall-L",
-    "Waterfall-H"
+    "Runin-STEIN"
   )
   if (!is.null(methods.flag$value)) {
     methods <- trimws(
