@@ -75,6 +75,64 @@ for (.comb_stein_module in .comb_stein_modules) {
   )
 }
 
+## 将一个剂量矩阵格式化为便于直接查看的文本。
+.format.dose.matrix <- function(x, digits = 2) {
+  if (is.null(dim(x))) return(format(round(x, digits), nsmall = digits))
+  rows <- apply(x, 1, function(row) {
+    paste(sprintf(paste0("%8.", digits, "f"), row), collapse = " ")
+  })
+  paste(rows, collapse = "\n")
+}
+
+## 生成每个场景的详细 TXT 报告，包含每个剂量组合的百分比矩阵。
+.write.scenario.txt <- function(path, name, result, pT, pE, ntrial) {
+  details <- attr(result, "dose.details")
+  true.ij <- attr(result, "true.obdcs")
+  labels <- apply(true.ij, 1, function(ij) sprintf("(%d,%d)", ij[1], ij[2]))
+  lines <- c(
+    "CombSTEIN simulation results",
+    paste0("Scenario: ", name),
+    paste0("Number of trials: ", ntrial),
+    paste0(
+      "Outcome mode: ",
+      if (isTRUE(attr(result, "delayed"))) "TITE" else "Complete"
+    ),
+    paste0("True OBDC(s): ", paste(labels, collapse = ", ")),
+    "Rows: Drug A dose levels i=1..I; columns: Drug B dose levels j=1..J",
+    "",
+    "True toxicity:",
+    .format.dose.matrix(pT, 2),
+    "",
+    "True efficacy:",
+    .format.dose.matrix(pE, 2),
+    ""
+  )
+
+  for (method in names(details)) {
+    d <- details[[method]]
+    lines <- c(
+      lines,
+      paste0("================ ", method, " ================"),
+      "Number of patients treated at each dose (average):",
+      .format.dose.matrix(d$average_patients, 2),
+      "",
+      "Patient allocation at each dose (%):",
+      .format.dose.matrix(d$allocation_percent, 2),
+      "",
+      "Number of toxicity observed at each dose (average):",
+      .format.dose.matrix(d$average_toxicity, 2),
+      "",
+      "Number of response observed at each dose (average):",
+      .format.dose.matrix(d$average_efficacy, 2),
+      "",
+      "Selection probabilities (%):",
+      .format.dose.matrix(d$selection_percent, 2),
+      ""
+    )
+  }
+  writeLines(lines, path, useBytes = TRUE)
+}
+
 ## 将命令行中的布尔值写法转换为单个逻辑值。
 ## `option` 仅用于生成明确的校验错误信息。
 .parse.cli.boolean <- function(value, option) {
@@ -345,6 +403,25 @@ run.comb.stein.cli <- function(
     )
     write.csv(result, scenario.outfile, row.names = FALSE)
     cat("  scenario results saved to", scenario.outfile, "\n")
+    scenario.txtfile <- file.path(
+      results.dir,
+      paste0(
+        "comb_stein_results_utility",
+        if (delayed) "_tite" else "",
+        "_",
+        name,
+        ".txt"
+      )
+    )
+    .write.scenario.txt(
+      scenario.txtfile,
+      name,
+      result,
+      scenario.truth$pT,
+      scenario.truth$pE,
+      ntrial
+    )
+    cat("  scenario details saved to", scenario.txtfile, "\n")
     ## 同时把当前场景追加到总结果表中。
     all.results <- rbind(all.results, result)
   }

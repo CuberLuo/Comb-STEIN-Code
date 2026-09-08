@@ -111,6 +111,8 @@ run.scenario <- function(
     enable = TRUE
   )
 
+  ## 保存每种方法在每个剂量组合上的详细计数，供场景 TXT 报告使用。
+  dose.details <- list()
   for (method in methods) {
     selection.count <- 0
     patient.percent.sum <- 0
@@ -119,6 +121,10 @@ run.scenario <- function(
     toxicity.stop.count <- 0
     efficacy.stop.count <- 0
     duration.sum <- 0
+    selection.matrix <- matrix(0, nrow = nrow(pT), ncol = ncol(pT))
+    patient.matrix <- matrix(0, nrow = nrow(pT), ncol = ncol(pT))
+    tox.matrix <- matrix(0, nrow = nrow(pT), ncol = ncol(pT))
+    eff.matrix <- matrix(0, nrow = nrow(pT), ncol = ncol(pT))
 
     method.results <- Filter(
       function(task) identical(task$method, method),
@@ -134,6 +140,9 @@ run.scenario <- function(
       ## earlystop_tox / earlystop_eff：是否因毒性/疗效原因提前停止；
       ## duration：完整结局或 TITE 模式下的试验持续时间。
       total.n <- sum(result$n)
+      patient.matrix <- patient.matrix + result$n
+      tox.matrix <- tox.matrix + result$x
+      eff.matrix <- eff.matrix + result$y
 
       ## 累加当前试验的总样本量和总毒性事件数。
       ## 循环结束后，再除以 ntrial 得到平均值。
@@ -153,6 +162,8 @@ run.scenario <- function(
       ## true.ij 可能包含多个并列最优组合，因此逐行比较；
       ## result$sel 是当前试验选择的一个 (行, 列) 坐标。
       if (!any(is.na(result$sel))) {
+        selection.matrix[result$sel[1], result$sel[2]] <-
+          selection.matrix[result$sel[1], result$sel[2]] + 1
         correct <- any(apply(
           true.ij,
           1,
@@ -187,6 +198,19 @@ run.scenario <- function(
     out[row, "Tox"] <- round(100 * toxicity.stop.count / ntrial, 1)
     out[row, "Eff"] <- round(100 * efficacy.stop.count / ntrial, 1)
     out[row, "Duration"] <- round(duration.sum / ntrial, 1)
+
+    total.patient.count <- sum(patient.matrix)
+    dose.details[[method]] <- list(
+      average_patients = patient.matrix / ntrial,
+      allocation_percent = if (total.patient.count > 0) {
+        100 * patient.matrix / total.patient.count
+      } else {
+        matrix(0, nrow = nrow(pT), ncol = ncol(pT))
+      },
+      average_toxicity = tox.matrix / ntrial,
+      average_efficacy = eff.matrix / ntrial,
+      selection_percent = 100 * selection.matrix / ntrial
+    )
   }
 
   ## 将真实 OBDC 和延迟设置作为属性附加到结果表。
@@ -195,5 +219,6 @@ run.scenario <- function(
   attr(out, "true.obdcs") <- true.ij
   attr(out, "delayed") <- delayed
   attr(out, "delay.control") <- delay.control
+  attr(out, "dose.details") <- dose.details
   out
 }
