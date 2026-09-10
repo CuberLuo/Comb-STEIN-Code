@@ -37,7 +37,7 @@ Tthresh <- 0.8
 Ethresh <- 0.9
 w1 <- 0.33
 w2 <- 1.09
-cohortsize <- 2
+cohortsize <- 3
 COHORTS_PER_COMBINATION <- 2
 RUNIN_COHORTS <- 4
 EFF_STOP_N <- 6
