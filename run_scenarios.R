@@ -115,7 +115,6 @@ run.scenario <- function(
   dose.details <- list()
   for (method in methods) {
     selection.count <- 0
-    patient.percent.sum <- 0
     sample.sum <- 0
     dlt.sum <- 0
     toxicity.stop.count <- 0
@@ -172,34 +171,31 @@ run.scenario <- function(
         if (correct) selection.count <- selection.count + 1
       }
 
-      ## 计算有多少患者被分配到了真实 OBDC。
-      ## 如果存在多个并列 OBDC，就把这些组合的患者数全部相加。
-      ## 这里使用总入组人数作分母，得到当前试验的百分比。
-      if (total.n > 0) {
-        true.index <- cbind(true.ij[, 1], true.ij[, 2])
-        n.at.true <- sum(result$n[true.index])
-        patient.percent.sum <-
-          patient.percent.sum + 100 * n.at.true / total.n
-      }
     }
 
     ## 当前方法的所有重复试验完成后，将累计值转换成汇总指标：
     ## Selection：正确选择 OBDC 的试验百分比；
-    ## Patient：分配到真实 OBDC 的患者百分比；
+    ## Patient：所有重复试验合并后，分配到真实 OBDC 的患者百分比；
     ## Sample：平均入组人数；
     ## DLTs：平均毒性事件数；
     ## Tox / Eff：因毒性/疗效提前停止的试验百分比；
     ## Duration：平均试验持续时间（天）。
     row <- out$Method == method
     out[row, "Selection"] <- round(100 * selection.count / ntrial, 1)
-    out[row, "Patient"] <- round(patient.percent.sum / ntrial, 1)
+    total.patient.count <- sum(patient.matrix)
+    true.index <- cbind(true.ij[, 1], true.ij[, 2])
+    true.patient.count <- sum(patient.matrix[true.index])
+    out[row, "Patient"] <- if (total.patient.count > 0) {
+      round(100 * true.patient.count / total.patient.count, 1)
+    } else {
+      0
+    }
     out[row, "Sample"] <- round(sample.sum / ntrial, 1)
     out[row, "DLTs"] <- round(dlt.sum / ntrial, 1)
     out[row, "Tox"] <- round(100 * toxicity.stop.count / ntrial, 1)
     out[row, "Eff"] <- round(100 * efficacy.stop.count / ntrial, 1)
     out[row, "Duration"] <- round(duration.sum / ntrial, 1)
 
-    total.patient.count <- sum(patient.matrix)
     dose.details[[method]] <- list(
       average_patients = patient.matrix / ntrial,
       allocation_percent = if (total.patient.count > 0) {

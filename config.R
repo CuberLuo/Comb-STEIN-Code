@@ -1,5 +1,5 @@
 DEFAULT_SEED <- 2026
-DEFAULT_NTRIAL <- 1L#试验次数
+DEFAULT_NTRIAL <- 1000L#试验次数
 
 ## 并行 worker 数。NULL 表示自动使用可用 CPU 核数减一，
 ## 至少保留一个 worker；可由 run.scenario(workers=) 或 --workers= 覆盖。
