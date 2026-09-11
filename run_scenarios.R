@@ -27,11 +27,9 @@ run.scenario <- function(
     Method = methods,
     Delay = if (delayed) "TITE" else "Complete",
     Selection = NA,
+    ET = NA,
     Patient = NA,
     Sample = NA,
-    DLTs = NA,
-    Tox = NA,
-    Eff = NA,
     Duration = NA
   )
 
@@ -116,9 +114,6 @@ run.scenario <- function(
   for (method in methods) {
     selection.count <- 0
     sample.sum <- 0
-    dlt.sum <- 0
-    toxicity.stop.count <- 0
-    efficacy.stop.count <- 0
     duration.sum <- 0
     selection.matrix <- matrix(0, nrow = nrow(pT), ncol = ncol(pT))
     patient.matrix <- matrix(0, nrow = nrow(pT), ncol = ncol(pT))
@@ -136,25 +131,14 @@ run.scenario <- function(
       ## n：每个剂量组合实际入组的患者数；
       ## x：每个剂量组合观察到的毒性事件数；
       ## sel：试验结束时选择的剂量组合；
-      ## earlystop_tox / earlystop_eff：是否因毒性/疗效原因提前停止；
       ## duration：完整结局或 TITE 模式下的试验持续时间。
       total.n <- sum(result$n)
       patient.matrix <- patient.matrix + result$n
       tox.matrix <- tox.matrix + result$x
       eff.matrix <- eff.matrix + result$y
 
-      ## 累加当前试验的总样本量和总毒性事件数。
-      ## 循环结束后，再除以 ntrial 得到平均值。
+      ## 累加当前试验的总样本量；循环结束后除以 ntrial 得到平均值。
       sample.sum <- sample.sum + total.n
-      dlt.sum <- dlt.sum + sum(result$x)
-
-      ## 统计该次试验是否因毒性或疗效规则提前结束。
-      if (result$earlystop_tox) {
-        toxicity.stop.count <- toxicity.stop.count + 1
-      }
-      if (result$earlystop_eff) {
-        efficacy.stop.count <- efficacy.stop.count + 1
-      }
       duration.sum <- duration.sum + result$duration
 
       ## 判断最终选中的组合是否属于真实 utility 最大的 OBDC。
@@ -175,13 +159,14 @@ run.scenario <- function(
 
     ## 当前方法的所有重复试验完成后，将累计值转换成汇总指标：
     ## Selection：正确选择 OBDC 的试验百分比；
+    ## ET：没有给出推荐剂量的试验百分比（Early Termination），等于 1 减去
+    ##     选择概率矩阵（selection.matrix / ntrial）全部取值之和；
     ## Patient：所有重复试验合并后，分配到真实 OBDC 的患者百分比；
     ## Sample：平均入组人数；
-    ## DLTs：平均毒性事件数；
-    ## Tox / Eff：因毒性/疗效提前停止的试验百分比；
     ## Duration：平均试验持续时间（天）。
     row <- out$Method == method
     out[row, "Selection"] <- round(100 * selection.count / ntrial, 1)
+    out[row, "ET"] <- round(100 * (1 - sum(selection.matrix) / ntrial), 1)
     total.patient.count <- sum(patient.matrix)
     true.index <- cbind(true.ij[, 1], true.ij[, 2])
     true.patient.count <- sum(patient.matrix[true.index])
@@ -191,9 +176,6 @@ run.scenario <- function(
       0
     }
     out[row, "Sample"] <- round(sample.sum / ntrial, 1)
-    out[row, "DLTs"] <- round(dlt.sum / ntrial, 1)
-    out[row, "Tox"] <- round(100 * toxicity.stop.count / ntrial, 1)
-    out[row, "Eff"] <- round(100 * efficacy.stop.count / ntrial, 1)
     out[row, "Duration"] <- round(duration.sum / ntrial, 1)
 
     dose.details[[method]] <- list(

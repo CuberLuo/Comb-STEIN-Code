@@ -37,7 +37,6 @@ simulate.trial.comb.stein <- function(
     c(1, 1)
   }
   earlystop_tox <- FALSE
-  earlystop_eff <- FALSE
   earlystop_no_candidate <- FALSE
   time_current <- 0
   duration <- 0
@@ -90,7 +89,6 @@ simulate.trial.comb.stein <- function(
       n_mat[i, j] >= EFF_STOP_N &&
         pr.eff.gt(y_mat[i, j], n_mat[i, j], EFF_STOP_CUT) > EFF_STOP_PROB
     ) {
-      earlystop_eff <- TRUE
       break
     }
 
@@ -130,8 +128,6 @@ simulate.trial.comb.stein <- function(
     x = x_mat,
     y = y_mat,
     n = n_mat,
-    earlystop_tox = earlystop_tox,
-    earlystop_eff = earlystop_eff,
     earlystop_no_candidate = earlystop_no_candidate,
     delayed = FALSE,
     duration = duration
@@ -157,7 +153,6 @@ simulate.trial.comb.stein.tite <- function(pT, pE, method, delay.control) {
   }
   time_current <- 0
   earlystop_tox <- FALSE
-  earlystop_eff <- FALSE
   earlystop_no_candidate <- FALSE
 
   for (cohort in seq_len(ncohort)) {
@@ -210,7 +205,6 @@ simulate.trial.comb.stein.tite <- function(pT, pE, method, delay.control) {
           EFF_STOP_CUT
         ) > EFF_STOP_PROB
     ) {
-      earlystop_eff <- TRUE
       break
     }
     if (cohort == ncohort) break
@@ -243,14 +237,12 @@ simulate.trial.comb.stein.tite <- function(pT, pE, method, delay.control) {
     final.selection(final$x, final$y, final$n, admissible)
   }
 
-  ## 返回最终计数、选择结果、停止原因和试验持续时间。
+  ## 返回最终计数、选择结果和试验持续时间。
   list(
     sel = selected,
     x = final$x,
     y = final$y,
     n = final$n,
-    earlystop_tox = earlystop_tox,
-    earlystop_eff = earlystop_eff,
     earlystop_no_candidate = earlystop_no_candidate,
     delayed = TRUE,
     duration = final$duration

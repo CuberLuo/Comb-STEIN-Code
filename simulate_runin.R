@@ -22,7 +22,7 @@ simulate.trial.runin.stein <- function(
   runin_path <- make.runin.path(I, J)
   debug.print(runin_path)
   path_pos <- 1
-  earlystop_tox <- earlystop_eff <- earlystop_no_candidate <- FALSE
+  earlystop_tox <- earlystop_no_candidate <- FALSE
   time_current <- 0
   duration <- 0
 
@@ -44,7 +44,7 @@ simulate.trial.runin.stein <- function(
     if (!any(admissible)) { earlystop_tox <- TRUE; break }
     if (n_mat[i, j] >= EFF_STOP_N &&
         pr.eff.gt(y_mat[i, j], n_mat[i, j], EFF_STOP_CUT) > EFF_STOP_PROB) {
-      earlystop_eff <- TRUE; break
+      break
     }
     if (cohort == ncohort) break
 
@@ -92,7 +92,6 @@ simulate.trial.runin.stein <- function(
   }
   list(
     sel = selected, x = x_mat, y = y_mat, n = n_mat,
-    earlystop_tox = earlystop_tox, earlystop_eff = earlystop_eff,
     earlystop_no_candidate = earlystop_no_candidate,
     delayed = FALSE, duration = duration
   )
@@ -112,7 +111,6 @@ simulate.trial.runin.stein.tite <- function(pT, pE, delay.control) {
   path_pos <- 1L
   time_current <- 0
   earlystop_tox <- FALSE
-  earlystop_eff <- FALSE
   earlystop_no_candidate <- FALSE
 
   for (cohort in seq_len(ncohort)) {
@@ -142,7 +140,6 @@ simulate.trial.runin.stein.tite <- function(pT, pE, delay.control) {
           interim$y[i, j], interim$ess_e[i, j], EFF_STOP_CUT
         ) > EFF_STOP_PROB
     ) {
-      earlystop_eff <- TRUE
       break
     }
     if (cohort == ncohort) break
@@ -197,8 +194,6 @@ simulate.trial.runin.stein.tite <- function(pT, pE, delay.control) {
     x = final$x,
     y = final$y,
     n = final$n,
-    earlystop_tox = earlystop_tox,
-    earlystop_eff = earlystop_eff,
     earlystop_no_candidate = earlystop_no_candidate,
     delayed = TRUE,
     duration = final$duration
