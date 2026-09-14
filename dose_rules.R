@@ -35,12 +35,12 @@ get.true.utility <- function(pT, pE) {
   utility.fn(pT, pE, w1, w2, phi)
 }
 
-## 按效用最大值识别所有真实最优生物剂量组合。
-## 返回包含行、列索引的两列矩阵，并保留完全并列的组合。
+## 识别所有与最大效用相差不超过 OBDC_UTILITY_TOLERANCE 的真实 OBDC。
+## 返回包含行、列索引的两列矩阵。
 get.true.obdc <- function(pT, pE) {
   utility <- get.true.utility(pT, pE)
   which(
-    abs(utility - max(utility)) <= sqrt(.Machine$double.eps),
+    max(utility) - utility <= OBDC_UTILITY_TOLERANCE,
     arr.ind = TRUE
   )
 }

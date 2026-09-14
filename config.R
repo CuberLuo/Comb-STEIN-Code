@@ -37,6 +37,8 @@ Tthresh <- 0.8
 Ethresh <- 0.9
 w1 <- 0.33
 w2 <- 1.09
+# Utility values within this distance of the global maximum are OBDCs.
+OBDC_UTILITY_TOLERANCE <- 0.03
 cohortsize <- 3
 COHORTS_PER_COMBINATION <- 2
 RUNIN_COHORTS <- 4

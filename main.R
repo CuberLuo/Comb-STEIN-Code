@@ -345,7 +345,7 @@ run.comb.stein.cli <- function(
 
   for (name in scenarios.to.run) {
     ## 每个场景都会调用 run.scenario()，运行 methods 中指定的方法。
-    ## OBDC 始终定义为 utility 最大的组合
+    ## OBDC 定义为与最大 utility 相差不超过配置阈值的组合。
     cat("Running scenario", name, "with ntrial =", ntrial, "...\n")
 
     ## 在模拟开始前打印当前场景由真实毒性率和疗效率计算的效用矩阵。
@@ -383,7 +383,7 @@ run.comb.stein.cli <- function(
       function(ij) sprintf("(%d,%d)", ij[1], ij[2])
     )
     cat(
-      "  true OBDC(s) [utility maximum]: ",
+      "  true OBDC(s) [within utility tolerance]: ",
       paste(labels, collapse = ", "),
       "\n",
       sep = ""
