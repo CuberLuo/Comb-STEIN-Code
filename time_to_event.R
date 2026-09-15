@@ -158,10 +158,14 @@ tite.next.decision.time <- function(
 }
 
 ## 汇总中期分析时点的所有患者记录。
-## 返回每个剂量组合的观测计数、各终点有效样本量和待定结局计数。
+## 每名患者在决策时点的状态按参考实现（fun_TITE_STEIN_update.R 第 3.1 步）
+## 分为三类：已观察到事件（delta = 1）、评估窗结束且无事件（delta = 0）
+## 以及尚未判定（delta = -1）。
+## 返回每个剂量组合的观测计数、各终点有效样本量、疗效结局已判定的例数
+## 和待定结局计数。
 tite.interim <- function(state, time, I, J, control) {
   dims <- c(I, J)
-  n_mat <- x_mat <- y_mat <- ess_t <- ess_e <- matrix(0, I, J)
+  n_mat <- x_mat <- y_mat <- ess_t <- ess_e <- asc_e <- matrix(0, I, J)
 
   tox_event_seen <- state$tox_event <= time
   eff_event_seen <- state$eff_event <= time
@@ -192,6 +196,10 @@ tite.interim <- function(state, time, I, J, control) {
       tox_no_event_complete[k] + tox_weight[k]
     ess_e[i, j] <- ess_e[i, j] + eff_event_seen[k] +
       eff_no_event_complete[k] + eff_weight[k]
+    ## ESS_e 中权重为 1 的部分：已观察到应答或评估窗结束且无应答；
+    ## 尚未判定的患者不计入。
+    asc_e[i, j] <- asc_e[i, j] + eff_event_seen[k] +
+      eff_no_event_complete[k]
   }
 
   list(
@@ -200,6 +208,7 @@ tite.interim <- function(state, time, I, J, control) {
     y = y_mat,
     ess_t = ess_t,
     ess_e = ess_e,
+    asc_e = asc_e,
     pending_t = matrix(
       tabulate(
         (state$dose_j[tox_pending] - 1L) * I +

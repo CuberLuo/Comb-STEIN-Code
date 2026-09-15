@@ -195,13 +195,14 @@ simulate.trial.comb.stein.tite <- function(pT, pE, method, delay.control) {
       break
     }
 
-    ## 如果当前组合的有效疗效样本量和疗效证据达到停止条件，
-    ## 则因疗效充分而停止。
+    ## 疗效充分性判定只使用已经判定的疗效结局（参考实现第 3.1 步的
+    ## delta_e 分类）。尚未判定的结局不进入分子，也不按有效样本量的
+    ## 权重折算成分母，否则疗效证据会被系统性压低，提前终止几乎不触发。
     if (
-      interim$n[i, j] >= EFF_STOP_N &&
+      interim$asc_e[i, j] >= EFF_STOP_N &&
         pr.eff.gt(
           interim$y[i, j],
-          interim$ess_e[i, j],
+          interim$asc_e[i, j],
           EFF_STOP_CUT
         ) > EFF_STOP_PROB
     ) {

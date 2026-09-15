@@ -134,10 +134,11 @@ simulate.trial.runin.stein.tite <- function(pT, pE, delay.control) {
       earlystop_tox <- TRUE
       break
     }
+    ## 与 Comb-STEIN 一致：疗效充分性判定只使用已经判定的疗效结局。
     if (
-      interim$n[i, j] >= EFF_STOP_N &&
+      interim$asc_e[i, j] >= EFF_STOP_N &&
         pr.eff.gt(
-          interim$y[i, j], interim$ess_e[i, j], EFF_STOP_CUT
+          interim$y[i, j], interim$asc_e[i, j], EFF_STOP_CUT
         ) > EFF_STOP_PROB
     ) {
       break
