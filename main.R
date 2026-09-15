@@ -65,6 +65,7 @@
   "simulate_runin.R",
   "simulate_stein.R",
   "scenarios.R",
+  "scenarios_case_study.R",
   "run_scenarios.R"
 )
 
@@ -299,6 +300,22 @@ run.comb.stein.cli <- function(
     methods <- trimws(
       strsplit(methods.flag$value, ",", fixed = TRUE)[[1]]
     )
+  }
+
+  ## 队列入组人数默认取 config.R 中的 cohortsize。
+  ## 敏感性分析需要比较不同队列大小，因此这里允许用 --cohort-size 覆盖。
+  ## 模拟函数在全局环境中查找 cohortsize，所以必须在全局环境赋值。
+  cohort.size.flag <- .pull.cli.option(args, "cohort-size", NULL)
+  args <- cohort.size.flag$args
+  if (!is.null(cohort.size.flag$value)) {
+    cohort.size.value <- suppressWarnings(
+      as.integer(cohort.size.flag$value)
+    )
+    if (is.na(cohort.size.value) || cohort.size.value < 1L) {
+      stop("--cohort-size 必须是正整数", call. = FALSE)
+    }
+    assign("cohortsize", cohort.size.value, envir = globalenv())
+    cat(sprintf("Cohort size overridden to %d\n", cohortsize))
   }
 
   ## 默认运行 scenarios.R 中定义的全部场景。

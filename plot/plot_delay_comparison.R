@@ -9,12 +9,36 @@
 ##   * 图例为两行三列，每列对应一种方法，上行为非 TITE、下行为 TITE。
 ##
 ## 用法：Rscript code/plot/plot_delay_comparison.R [项目根目录]
+##       [--complete-run=output/run_...] [--tite-run=output/run_...]
+##       [--out=fig_delay_comparison_metrics]
+##
+## 默认按时间戳自动选取 output/ 下最新的两次运行；当同一批实验包含多个
+## 设置（例如 AW=(1,2) 与 AW=(2,3) 的敏感性分析）时，必须用
+## --complete-run / --tite-run 明确指定要画的那两次运行。
 
 suppressPackageStartupMessages({
   library(ggplot2)
 })
 
 args <- commandArgs(trailingOnly = TRUE)
+
+## 从参数列表中取出 --name=value 形式的选项，其余位置参数留给调用方。
+.pull.option <- function(args, name) {
+  pattern <- paste0("^--", name, "=")
+  hit <- grep(pattern, args, value = TRUE)
+  if (length(hit) == 0) {
+    return(list(value = NULL, args = args))
+  }
+  list(value = sub(pattern, "", hit[[1]]), args = args[!grepl(pattern, args)])
+}
+
+complete.opt <- .pull.option(args, "complete-run")
+args <- complete.opt$args
+tite.opt <- .pull.option(args, "tite-run")
+args <- tite.opt$args
+out.opt <- .pull.option(args, "out")
+args <- out.opt$args
+
 project_root <- if (length(args) >= 1) {
   normalizePath(args[[1]], mustWork = TRUE)
 } else {
@@ -22,6 +46,33 @@ project_root <- if (length(args) >= 1) {
 }
 if (!dir.exists(file.path(project_root, "output"))) {
   stop("No output/ directory under ", project_root, call. = FALSE)
+}
+
+out_name <- if (is.null(out.opt$value)) {
+  "fig_delay_comparison_metrics"
+} else {
+  out.opt$value
+}
+
+## 把 --complete-run / --tite-run 给出的目录解析为合并结果 CSV 的路径。
+.run.csv <- function(run_dir, delay) {
+  path <- if (grepl("^(/|[A-Za-z]:)", run_dir)) {
+    run_dir
+  } else {
+    file.path(project_root, run_dir)
+  }
+  file <- file.path(
+    path,
+    if (delay == "TITE") {
+      "comb_stein_results_utility_tite_all.csv"
+    } else {
+      "comb_stein_results_utility_all.csv"
+    }
+  )
+  if (!file.exists(file)) {
+    stop("找不到 ", delay, " 的运行结果：", file, call. = FALSE)
+  }
+  file
 }
 
 output_root <- file.path(project_root, "output")
@@ -103,6 +154,25 @@ if (length(missing_cols) > 0) {
 ## 每个延迟设置只保留时间戳最新的运行，避免历史目录重复计入。
 raw <- raw[order(raw$.run_stamp, decreasing = TRUE), ]
 raw <- raw[!duplicated(raw[c("Scenario", "Method", "Delay")]), ]
+
+## 显式指定的运行会整段替换自动发现的结果，避免同一 Delay 下混入
+## 不同设置的运行（例如 AW=(1,2) 与 AW=(2,3)）。
+.replace.delay <- function(raw, delay, run_dir) {
+  frame <- utils::read.csv(
+    .run.csv(run_dir, delay),
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  )
+  frame$Delay <- delay
+  frame$.run_stamp <- "explicit"
+  rbind(raw[raw$Delay != delay, , drop = FALSE], frame)
+}
+if (!is.null(complete.opt$value)) {
+  raw <- .replace.delay(raw, "Complete", complete.opt$value)
+}
+if (!is.null(tite.opt$value)) {
+  raw <- .replace.delay(raw, "TITE", tite.opt$value)
+}
 raw$.run_stamp <- NULL
 
 ## 情景按编号排序（S1、S2、...、S12）。
@@ -127,10 +197,17 @@ if (nrow(raw) != expected_rows) {
   )
 }
 
+## 数据表与图片使用同一组文件名：图片为 <out_name>.png，
+## 数据表去掉 fig_ 前缀后加 _metrics.csv（保持既有文件名不变）。
+## 数据表名去掉 fig_ 前缀后加 _metrics.csv。out_name 本身就以 _metrics 结尾时
+## 先去掉这个后缀，避免出现 ..._metrics_metrics.csv。
+data_base <- sub("_metrics$", "", sub("^fig_", "", out_name))
+data_path <- file.path(figure_dir, paste0(data_base, "_metrics.csv"))
+
 write.csv(
   raw[order(raw$Scenario, raw$Method, raw$Delay),
       c("Scenario", "Method", "Delay", "Selection", "Patient", "Sample", "Duration")],
-  file.path(figure_dir, "delay_comparison_metrics.csv"),
+  data_path,
   row.names = FALSE
 )
 
@@ -220,9 +297,9 @@ plot <- ggplot(long, aes(x = Scenario, y = Value, fill = Series)) +
 figure_width <- 10
 figure_height <- 9
 
-ggsave(file.path(figure_dir, "fig_delay_comparison_metrics.png"), plot,
+ggsave(file.path(figure_dir, paste0(out_name, ".png")), plot,
        width = figure_width, height = figure_height, dpi = 300)
-ggsave(file.path(figure_dir, "fig_delay_comparison_metrics.pdf"), plot,
+ggsave(file.path(figure_dir, paste0(out_name, ".pdf")), plot,
        width = figure_width, height = figure_height, device = grDevices::cairo_pdf)
 
 cat("Saved figure and table to:", figure_dir, "\n")
