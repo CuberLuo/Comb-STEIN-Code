@@ -8,7 +8,7 @@
 ##   * 深色柱形为完整结局（non-TITE），浅色柱形为 TITE 扩展；
 ##   * 图例为两行三列，每列对应一种方法，上行为非 TITE、下行为 TITE。
 ##
-## 用法：Rscript code/plot/plot_delay_comparison.R [项目根目录]
+## 用法：Rscript Comb-STEIN-Code/plot/plot_delay_comparison.R [项目根目录]
 ##       [--complete-run=output/run_...] [--tite-run=output/run_...]
 ##       [--out=fig_delay_comparison_metrics]
 ##
@@ -175,8 +175,10 @@ if (!is.null(tite.opt$value)) {
 }
 raw$.run_stamp <- NULL
 
-## 情景按编号排序（S1、S2、...、S12）。
-scenario_number <- as.integer(sub("^S", "", raw$Scenario))
+## 情景按编号排序（S1、S2、...、S12；真实案例则按 C1、C2、... 排）。
+## 前缀同时接受 S 与 C：真实案例情景的编号是 C1-C6，若只剥 S 会全部得到 NA，
+## order() 就会退回原始出现顺序，图形里的情景次序将取决于文件扫描顺序。
+scenario_number <- as.integer(sub("^[SC]", "", raw$Scenario))
 raw$Scenario <- factor(
   raw$Scenario,
   levels = unique(raw$Scenario[order(scenario_number)])

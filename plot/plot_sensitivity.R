@@ -5,9 +5,12 @@
 ## 每项分析输出一张四面板图（选择率 / 患者分配 / 样本量 / 持续时间）
 ## 和一份对应的数据表。
 ##
-## 运行配置来自 output/sensitivity/runs.csv（由 code/tmp/run_sensitivity.R 生成）。
+## 柱形与图例的排列与正文图3/图4一致：同一方法的各个设置**相邻**（同一色系的
+## 深浅色成对出现），方法之间再依次排列；图例按列填充，每列是一种方法的深浅色。
 ##
-## 用法：Rscript code/plot/plot_sensitivity.R [项目根目录]
+## 运行配置来自 output/sensitivity/runs.csv（由 Comb-STEIN-Code/tmp/run_sensitivity.R 生成）。
+##
+## 用法：Rscript Comb-STEIN-Code/plot/plot_sensitivity.R [项目根目录]
 ##       [--manifest=output/sensitivity/runs.csv] [--figure-dir=output/figures]
 
 suppressPackageStartupMessages({
@@ -78,6 +81,11 @@ metric_levels <- names(panel_labels)
   grDevices::rgb(mixed[1], mixed[2], mixed[3], maxColorValue = 255)
 }
 
+## 第 k 个设置（共 n 个）的浅化比例：第一个设置最深，最后一个最浅。
+.shade_of <- function(k, n) {
+  if (n <= 1) 0 else 0.55 * (k - 1) / (n - 1)
+}
+
 .load.run <- function(id, label) {
   hit <- manifest$id == id
   if (!any(hit)) stop("运行清单缺少配置：", id, call. = FALSE)
@@ -123,23 +131,22 @@ analyses <- list(
 )
 
 for (analysis in analyses) {
-  ## 组装长表：每个条目一个方法一组颜色，条目内按方法展开。
-  ## 系列顺序：每个设置内展开三种方法，设置之间按 entries 顺序排列。
+  ## 组装长表：每个方法一组颜色，方法内按设置展开。
+  ## 系列顺序与正文图3/图4保持一致：**同一方法的各个设置相邻**（深浅成对），
+  ## 方法之间再依次排列，即 [Comb-STEIN-L 各设置] [Comb-STEIN-H 各设置] [Runin-STEIN 各设置]。
+  ## 注意：展开顺序必须是"方法在外、设置在内"，写成 lapply(entries, ...) 会把
+  ## 同一设置的三根柱形排在一起、深浅色系被拆散，与正文图不一致。
   ## 这里不能用 outer() 生成：它会把设置下标扩成长向量，而 [[ 收到
   ## 向量下标时会做递归索引，导致报错。
+  entry_labels <- vapply(analysis$entries, function(entry) entry$label, character(1))
   series_levels <- unlist(lapply(
-    analysis$entries,
-    function(entry) paste(method_levels, entry$label, sep = "\n")
+    method_levels,
+    function(method) paste(method, entry_labels, sep = "\n")
   ))
   long <- list()
   csv_rows <- list()
   for (entry_index in seq_along(analysis$entries)) {
     entry <- analysis$entries[[entry_index]]
-    shade <- if (length(analysis$entries) == 1) {
-      0
-    } else {
-      0.55 * (entry_index - 1) / (length(analysis$entries) - 1)
-    }
     frame <- .load.run(entry$id, entry$label)
     frame$Series <- factor(
       paste(frame$Method, entry$label, sep = "\n"),
@@ -162,19 +169,19 @@ for (analysis in analyses) {
   scenario_levels <- unique(csv$Scenario[order(scenario_number)])
   long$Scenario <- factor(long$Scenario, levels = scenario_levels)
 
+  ## 配色必须与 series_levels 的顺序**同一口径**（方法在外、设置在内），
+  ## 否则 setNames 会把深浅色错配到别的系列上。
   series_colors <- setNames(
-    unlist(lapply(seq_along(analysis$entries), function(entry_index) {
-      shade <- if (length(analysis$entries) == 1) {
-        0
-      } else {
-        0.55 * (entry_index - 1) / (length(analysis$entries) - 1)
-      }
-      vapply(
-        method_levels,
-        function(method) .mix.white(method_colors[[method]], shade),
+    unlist(lapply(
+      method_levels,
+      function(method) vapply(
+        seq_along(analysis$entries),
+        function(entry_index) {
+          .mix.white(method_colors[[method]], .shade_of(entry_index, length(analysis$entries)))
+        },
         character(1)
       )
-    })),
+    )),
     series_levels
   )
 
@@ -184,7 +191,9 @@ for (analysis in analyses) {
                labeller = labeller(Metric = panel_labels)) +
     scale_fill_manual(
       values = series_colors, breaks = series_levels, name = "Method",
-      guide = guide_legend(nrow = length(analysis$entries), byrow = TRUE)
+      ## byrow = FALSE 让图例按**列**填充：每一列是一种方法的深浅色，
+      ## 与正文图3/图4的图例排法一致（每列上下两根是同色系的深浅两档）。
+      guide = guide_legend(nrow = length(analysis$entries), byrow = FALSE)
     ) +
     scale_y_continuous(
       expand = expansion(mult = c(0, 0.08)),

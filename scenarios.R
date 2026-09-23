@@ -102,7 +102,7 @@ ncol_map <- vapply(scenarios, function(s) ncol(s$pT), integer(1))
 build.pTpE <- function(name) {
   key <- as.character(name)
   if (key %in% names(scenarios)) return(scenarios[[key]])
-  ## 真实案例情景保存在 code/scenarios_case_study.R 中，未并入默认列表，
+  ## 真实案例情景保存在 Comb-STEIN-Code/scenarios_case_study.R 中，未并入默认列表，
   ## 但显式按名字请求（例如 main.R C1）时同样可以取用。
   if (exists("case.study.scenarios", inherits = TRUE) &&
       key %in% names(case.study.scenarios)) {

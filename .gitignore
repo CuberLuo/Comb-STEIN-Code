@@ -1,0 +1,6 @@
+# Scratch / working directory
+/tmp/
+
+# Python
+__pycache__/
+*.py[cod]

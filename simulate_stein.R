@@ -5,7 +5,8 @@ simulate.trial.comb.stein <- function(
   pE,
   method = c("CombSTEIN-L", "CombSTEIN-H"),
   delayed = FALSE,
-  delay.control = NULL
+  delay.control = NULL,
+  trace = FALSE
 ) {
   method <- match.arg(method)
   ## 延迟结局模式使用单独的 TITE 实现；这里先完成分流。
@@ -14,7 +15,8 @@ simulate.trial.comb.stein <- function(
       pT,
       pE,
       method,
-      normalize.delay.control(delay.control)
+      normalize.delay.control(delay.control),
+      trace = trace
     ))
   }
   delay.control <- normalize.delay.control(delay.control)
@@ -40,6 +42,9 @@ simulate.trial.comb.stein <- function(
   earlystop_no_candidate <- FALSE
   time_current <- 0
   duration <- 0
+  ## trace = TRUE 时逐队列记录分配到的剂量组合、入组时间和队列结局，
+  ## 供单个试验的过程轨迹图使用；默认不记录，避免影响正常模拟的开销。
+  cohort.trace <- if (trace) vector("list", ncohort) else NULL
 
   for (cohort in seq_len(ncohort)) {
     ## 每次循环模拟一个队列，并在队列结束后进行一次剂量决策。
@@ -71,6 +76,21 @@ simulate.trial.comb.stein <- function(
     )
     time_current <- timing$next_time#完成评估且下一队列可以开始入组的最早时间
     duration <- timing$duration#当前已入组患者完成全部评估的时间
+
+    if (trace) {
+      cohort.trace[[cohort]] <- data.frame(
+        cohort = cohort,
+        dose_i = i,
+        dose_j = j,
+        enroll_start = min(timing$enroll),
+        enroll_end = max(timing$enroll),
+        decision_time = time_current,
+        tox = wT,
+        eff = wE,
+        pend_tox = 0L,
+        pend_eff = 0L
+      )
+    }
 
     ## 更新可接受剂量集合：超毒性组合及其右上方向可能被排除，
     ## 疗效不足的组合会被排除。
@@ -130,13 +150,20 @@ simulate.trial.comb.stein <- function(
     n = n_mat,
     earlystop_no_candidate = earlystop_no_candidate,
     delayed = FALSE,
-    duration = duration
+    duration = duration,
+    trace = if (trace) do.call(rbind, Filter(Negate(is.null), cohort.trace))
   )
 }
 
 ## 运行一次 STEIN 试验的时间到事件版本。
 ## `delay.control` 必须已经由 `normalize.delay.control()` 规范化。
-simulate.trial.comb.stein.tite <- function(pT, pE, method, delay.control) {
+simulate.trial.comb.stein.tite <- function(
+  pT,
+  pE,
+  method,
+  delay.control,
+  trace = FALSE
+) {
   ## TITE 版本与完整结局版本使用相同的剂量移动规则，
   ## 但每次决策前先根据随访进度计算有效样本量。
   I <- nrow(pT)
@@ -154,6 +181,9 @@ simulate.trial.comb.stein.tite <- function(pT, pE, method, delay.control) {
   time_current <- 0
   earlystop_tox <- FALSE
   earlystop_no_candidate <- FALSE
+  ## 逐队列的记录时间：第 k 个队列是在 decision_times[k] 做出下一步决策的。
+  ## 它对应过程轨迹图里每一个队列的观测时刻。
+  decision_times <- numeric(0)
 
   for (cohort in seq_len(ncohort)) {
     ## 入组当前队列，并按照延迟结局机制推进试验时间。
@@ -180,6 +210,7 @@ simulate.trial.comb.stein.tite <- function(pT, pE, method, delay.control) {
     ## 在决策时刻计算每个剂量组合的有效毒性/疗效样本量和事件数。
     interim <- tite.interim(state, decision_time, I, J, delay.control)
     time_current <- decision_time
+    decision_times[cohort] <- decision_time
 
     ## 用有效样本量执行与完整结局版本相同的监测和可接受性更新。
     admissible <- update.admissible(
@@ -246,7 +277,8 @@ simulate.trial.comb.stein.tite <- function(pT, pE, method, delay.control) {
     n = final$n,
     earlystop_no_candidate = earlystop_no_candidate,
     delayed = TRUE,
-    duration = final$duration
+    duration = final$duration,
+    trace = if (trace) tite.cohort.trace(state, decision_times)
   )
 }
 

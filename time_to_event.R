@@ -54,6 +54,7 @@ complete.cohort.timing <- function(
   }
 
   list(
+    enroll = enroll,
     next_time = max(next_accrual, tox_end, eff_end),
     duration = max(tox_end, eff_end)
   )
@@ -250,5 +251,33 @@ tite.final.counts <- function(state, I, J) {
     } else {
       max(c(state$tox_end, state$eff_end))
     }
+  )
+}
+
+## 把患者级状态整理成单个试验的过程轨迹表，供过程轨迹图使用。
+## 每位患者一行，记录其所属队列、剂量组合、入组时间、所属队列做出剂量决策
+## 的时刻，以及在该时刻两个终点的判定状态：
+##   tox_state: dlt     已观察到剂量限制性毒性
+##              pending 随访中，毒性观察窗尚未结束（结局待定）
+##              none    观察窗结束且未发生毒性
+##   eff_state: benefit / pending / none，含义同上。
+tite.cohort.trace <- function(state, decision_times) {
+  if (nrow(state) == 0L) {
+    return(NULL)
+  }
+  t_dec <- decision_times[state$cohort]
+  tox_seen <- state$tox_event <= t_dec
+  eff_seen <- state$eff_event <= t_dec
+  tox_done <- state$tox_end <= t_dec
+  eff_done <- state$eff_end <= t_dec
+  data.frame(
+    cohort = state$cohort,
+    dose_i = state$dose_i,
+    dose_j = state$dose_j,
+    enroll = state$enroll,
+    decision_time = t_dec,
+    tox_state = ifelse(tox_seen, "dlt", ifelse(tox_done, "none", "pending")),
+    eff_state = ifelse(eff_seen, "benefit", ifelse(eff_done, "none", "pending")),
+    stringsAsFactors = FALSE
   )
 }

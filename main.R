@@ -31,7 +31,7 @@
       function(path) dirname(normalizePath(path, mustWork = TRUE)),
       character(1)
     ))
-    ## 选择真正包含本脚本模块的目录，例如 code/，而不是项目根目录。
+    ## 选择真正包含本脚本模块的目录，例如 Comb-STEIN-Code/，而不是项目根目录。
     valid.dir <- frame.dirs[file.exists(file.path(frame.dirs, "config.R"))]
     if (length(valid.dir) > 0) return(valid.dir[length(valid.dir)])
   }
@@ -46,8 +46,8 @@
   }
   working.dir <- normalizePath(getwd(), mustWork = TRUE)
   if (file.exists(file.path(working.dir, "config.R"))) return(working.dir)
-  if (file.exists(file.path(working.dir, "code", "config.R"))) {
-    return(normalizePath(file.path(working.dir, "code"), mustWork = TRUE))
+  if (file.exists(file.path(working.dir, "Comb-STEIN-Code", "config.R"))) {
+    return(normalizePath(file.path(working.dir, "Comb-STEIN-Code"), mustWork = TRUE))
   }
   stop("无法定位 main.R 所在目录：未找到 config.R")
 }
