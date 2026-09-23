@@ -114,4 +114,4 @@ run records the seed and the full configuration in its output directory.
 
 ## License
 
-MIT — see [LICENSE](../LICENSE).
+MIT — see [LICENSE](LICENSE).
