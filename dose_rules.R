@@ -1,25 +1,24 @@
-## 后验监测、可接受性更新和剂量选择规则。
+## Posterior monitoring, admissibility updates and dose-selection rules.
 
-## 在 Beta(1, 1) 先验下计算 Pr（毒性概率 > `cut`）。
-## `x` 和 `n` 可以是标量、向量或维度相容的矩阵。
+## All three assume the conjugate Beta(1, 1) prior; arguments may be scalars,
+## vectors or conformable matrices.
+## Pr(toxicity probability > cut)
 pr.overtox <- function(x, n, cut) {
   1 - pbeta(cut, x + 1, n - x + 1)
 }
 
-## 在 Beta(1, 1) 先验下计算 Pr（疗效概率 < `cut`）。
-## `y` 和 `n` 可以是标量、向量或维度相容的矩阵。
+## Pr(efficacy probability < cut)
 pr.ineff <- function(y, n, cut) {
   pbeta(cut, y + 1, n - y + 1)
 }
 
-## 在 Beta(1, 1) 先验下计算 Pr（疗效概率 > `cut`）。
-## `y` 和 `n` 可以是标量、向量或维度相容的矩阵。
+## Pr(efficacy probability > cut)
 pr.eff.gt <- function(y, n, cut) {
   1 - pbeta(cut, y + 1, n - y + 1)
 }
 
-## 标记超过毒性或无效性阈值的已观测剂量组合。
-## 返回名为 `overtox` 和 `ineff` 的逻辑矩阵。
+## Unobserved cells (n == 0) are never flagged: monitoring relies on data, not
+## on the prior, so escalation is not blocked before a combination is tried.
 monitor.flags <- function(x_mat, y_mat, n_tox, n_eff = n_tox) {
   observed_tox <- n_tox > 0
   observed_eff <- n_eff > 0
@@ -30,13 +29,12 @@ monitor.flags <- function(x_mat, y_mat, n_tox, n_eff = n_tox) {
   list(overtox = overtox, ineff = ineff)
 }
 
-## 根据场景的真实毒性率和疗效率计算真实效用矩阵。
 get.true.utility <- function(pT, pE) {
   utility.fn(pT, pE, w1, w2, phi)
 }
 
-## 识别所有与最大效用相差不超过 OBDC_UTILITY_TOLERANCE 的真实 OBDC。
-## 返回包含行、列索引的两列矩阵。
+## True (oracle) OBDCs: every combination whose utility is within
+## OBDC_UTILITY_TOLERANCE of the maximum, so ties are all counted as correct.
 get.true.obdc <- function(pT, pE) {
   utility <- get.true.utility(pT, pE)
   which(
@@ -45,9 +43,8 @@ get.true.obdc <- function(pT, pE) {
   )
 }
 
-## 将后验安全性和无效性规则应用于可接受性矩阵。
-## 过度毒性的单元格还会排除其东北方向的组合；
-## 疗效不足的单元格只排除自身。
+## An over-toxic cell also eliminates its north-east quadrant, by the monotonic
+## toxicity assumption; a futile cell only eliminates itself.
 update.admissible <- function(
   x_mat,
   y_mat,
@@ -68,14 +65,14 @@ update.admissible <- function(
   admissible
 }
 
-## 构造下一次剂量组合分配的局部候选集合。
-## 当前观测毒性率超过 phi 时，不允许升级。
+## Local candidate set; no escalation is allowed once the observed toxicity
+## rate at (i, j) exceeds phi, which leaves only the two de-escalations.
 alt.set.C <- function(i, j, I, J, p_ij_hat) {
   candidates <- list()
-  if (p_ij_hat > phi) {# 高毒性则候选剂量集合为2个剂量
+  if (p_ij_hat > phi) {
     if (i > 1) candidates <- c(candidates, list(c(i - 1, j)))
     if (j > 1) candidates <- c(candidates, list(c(i, j - 1)))
-  } else {#低毒性则候选剂量集合为5个剂量
+  } else {
     if (i > 1) candidates <- c(candidates, list(c(i - 1, j)))
     if (j > 1) candidates <- c(candidates, list(c(i, j - 1)))
     candidates <- c(candidates, list(c(i, j)))
@@ -85,8 +82,8 @@ alt.set.C <- function(i, j, I, J, p_ij_hat) {
   candidates
 }
 
-## 选择疗效后验概率最大的候选组合。
-## 使用确定性的剂量索引项打破后验得分相同的情况。
+## The 1e-6 * (i + j) term breaks ties deterministically by dose index, so
+## equal posteriors are resolved reproducibly rather than by Vapply order.
 pick.best.by.eff <- function(cand_list, y_mat, n_mat) {
   posterior <- sapply(cand_list, function(ij) {
     score <- pr.eff.gt(
@@ -105,8 +102,10 @@ pick.best.by.eff <- function(cand_list, y_mat, n_mat) {
   cand_list[[which.max(posterior)]]
 }
 
-## 在已治疗且可接受的组合中选择拟合效用最大的最终组合。
-## 返回 c(row, column)；没有符合条件的组合时返回两个 NA 整数。
+## Final pick among combinations that were both treated and admissible.
+## Pseudo-counts (x + 0.05) / (n + 0.1) are also passed to Iso::biviso as weights,
+## which enforces the partial ordering of both agents before scoring utility.
+## Returns c(row, column), or two NA integers when nothing is eligible.
 final.selection <- function(
   x_mat,
   y_mat,
@@ -128,9 +127,9 @@ final.selection <- function(
   which(utility == max(utility), arr.ind = TRUE)[1, ]
 }
 
-## 构造入组阶段使用的行优先、列交替升级路径。
-## 先覆盖两个剂量方向，再沿对角区域扩展，有利于探索非单调疗效。
-## 返回列表中最多包含 `ncohort` 个整数索引对。
+## Run-in path: row-first, alternating between the two agents so both axes are
+## exercised early. Hitting a grid edge stops that direction, so the returned
+## list can be shorter than ncohort.
 make.runin.path <- function(I, J, ncohort = RUNIN_COHORTS) {
   path <- list(c(1L, 1L))
   current <- c(1L, 1L)

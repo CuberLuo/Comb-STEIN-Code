@@ -1,22 +1,23 @@
-## Cai、Yuan 和 Ji（2014）及 Comb-BOIN12 使用的贝叶斯二次逻辑回归疗效估计器：
+## Bayesian quadratic logistic efficacy estimator of Cai, Yuan and Ji (2014),
+## as used by Comb-BOIN12:
 ##
-##   logit(q[i,j]) = gamma[1] + gamma[2] * a[i] + gamma[3] * b[j]
-##                   + gamma[4] * a[i]^2 + gamma[5] * b[j]^2.
+##   logit(q[i,j]) = gamma[1] + gamma[2]*a[i] + gamma[3]*b[j]
+##                 + gamma[4]*a[i]^2 + gamma[5]*b[j]^2.
 ##
-## 剂量得分 a 和 b 标准化为均值 0、标准差 0.5。
-## 模型仅保留两个药物的主效应和平方项，不包含交互项或剂量单元偏差。
+## Dose scores are standardised to mean 0, SD 0.5. Only main effects and squared
+## terms are kept: no agent-by-agent interaction and no per-cell random effect,
+## so the fit borrows strength across the whole grid.
 
 .efficacy_fit_cache <- new.env(parent = emptyenv())
 
-## 将有序剂量水平标准化为均值 0、标准差 0.5。
-## 只有一个剂量水平的药物使用中性得分 0。
+## A single-level agent gets the neutral score 0, because its SD is undefined.
 .standardize.dose.scores <- function(n.levels) {
   scores <- seq_len(n.levels)
   if (n.levels == 1L) return(0)
   (scores - mean(scores)) / (2 * stats::sd(scores))
 }
 
-## 将疗效计数和 MCMC 设置序列化为确定性的缓存键。
+## Cache key over counts + MCMC settings: identical data refits only once.
 .efficacy.cache.key <- function(
   y_mat,
   n_mat,
@@ -38,7 +39,7 @@
   )
 }
 
-## 根据观测计数矩阵生成可复现且为正的 JAGS 随机种子。
+## Seed derived from the data (not the clock), so fits are reproducible.
 .efficacy.jags.seed <- function(y_mat, n_mat) {
   values <- c(
     nrow(y_mat),
@@ -51,8 +52,8 @@
   as.integer((sum(weighted) %% 2147483646) + 1)
 }
 
-## 使用层级二次逻辑回归 JAGS 模型估计疗效概率。
-## 输入为维度一致的疗效计数矩阵和样本量矩阵；返回后验均值概率矩阵。
+## Posterior mean efficacy per cell, from the hierarchical quadratic logistic
+## model above (weakly informative t priors on gamma).
 eff.estimate <- function(
   y_mat,
   n_mat,
@@ -138,9 +139,9 @@ eff.estimate <- function(
   )
 
   draws.per.chain <- ceiling(n_samples / n_chains)
-  ## 直接从 rjags 读取监测数组。对大量拟合结果调用 coda::as.matrix()
-  ## 偶尔会把 expression 对象保留为行名，导致 base::as.data.frame() 失败。
-  ## 原始 mcarray 的维度为 q 单元格 x 迭代 x 链，不需要行名。
+  ## Read the mcarray from rjags directly: for large fits coda::as.matrix()
+  ## can retain expression objects as rownames, which then breaks
+  ## base::as.data.frame(). The mcarray is already cell x iteration x chain.
   samples <- rjags::jags.samples(
     model,
     variable.names = "q",
@@ -182,8 +183,8 @@ eff.estimate <- function(
   q.final
 }
 
-## 根据毒性（`p`）和疗效（`q`）计算设计效用。
-## 毒性高于 `phi` 时，额外施加由 `w2` 加权的惩罚。
+## Design utility. The extra w2-weighted penalty applies only above phi, making
+## phi both the toxicity decision boundary and the kink of the utility.
 utility.fn <- function(p, q, w1, w2, phi) {
   q - w1 * p - w2 * p * (p > phi)
 }

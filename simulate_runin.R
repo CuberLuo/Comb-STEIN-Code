@@ -1,6 +1,8 @@
-## RunIn-STEIN 的完整结局和时间到事件模拟。
+## RunIn-STEIN simulation: complete-outcome and time-to-event (TITE) variants.
+## Both follow the run-in path for the first RUNIN_COHORTS cohorts, then switch
+## to the local candidate set, stopping early if nothing stays admissible.
 
-## 使用完整结局模拟一次 RunIn-STEIN 试验。
+## Complete-outcome version; `delayed = TRUE` delegates to the TITE simulator.
 simulate.trial.runin.stein <- function(
   pT,
   pE,
@@ -49,7 +51,7 @@ simulate.trial.runin.stein <- function(
     if (cohort == ncohort) break
 
     p_ij_hat <- x_mat[i, j] / n_mat[i, j]
-    # 前 RUNIN_COHORTS 个队列使用 run-in 路径
+    # first RUNIN_COHORTS cohorts follow the run-in path
     if (cohort < RUNIN_COHORTS) {
       if (path_pos < length(runin_path)) path_pos <- path_pos + 1L
       next_dose <- runin_path[[path_pos]]
@@ -97,9 +99,8 @@ simulate.trial.runin.stein <- function(
   )
 }
 
-## TITE 版本的 RunIn-STEIN。
-## 前 RUNIN_COHORTS 个队列优先沿预设路径移动；如果路径上的
-## 剂量不可接受，则改用当前剂量附近的可接受候选组合。
+## TITE version. Monitoring uses effective sample sizes rather than enrolled
+## counts, because pending outcomes contribute partial weight.
 simulate.trial.runin.stein.tite <- function(pT, pE, delay.control) {
   I <- nrow(pT)
   J <- ncol(pT)
@@ -134,7 +135,7 @@ simulate.trial.runin.stein.tite <- function(pT, pE, delay.control) {
       earlystop_tox <- TRUE
       break
     }
-    ## 与 Comb-STEIN 一致：疗效充分性判定只使用已经判定的疗效结局。
+    ## As in Comb-STEIN: the efficacy stop uses only resolved efficacy outcomes.
     if (
       interim$asc_e[i, j] >= EFF_STOP_N &&
         pr.eff.gt(

@@ -1,12 +1,11 @@
-## 时间到事件数据生成和有效样本量计算。
-##
-## 本模块遵循 TITE-STEIN 论文及其参考实现：
-##   * 事件时间在各自的评估窗口内服从均匀分布；
-##   * 尚未发生事件的待定结局按随访时间/评估窗口计入有效样本量；
-##   * 已观测事件或已完成的无事件评估计为 1；
-##   * 当前组合的毒性和疗效结局达到要求的确认比例后，才能继续入组。
+## Time-to-event outcome generation and effective sample size (ESS) computation.
+## Follows TITE-STEIN:
+##   * event times are uniform within the assessment window;
+##   * pending outcomes contribute follow_up / window to ESS;
+##   * an observed event or a completed event-free assessment counts as 1;
+##   * with suspension, accrual waits for the required confirmation fraction.
 
-## 将用户延迟设置与默认值合并，返回完整的延迟控制列表。
+# merges user delay settings with the defaults
 normalize.delay.control <- function(control = NULL) {
   if (is.null(control)) control <- list()
   out <- utils::modifyList(DEFAULT_DELAY_CONTROL, control)
@@ -19,9 +18,9 @@ normalize.delay.control <- function(control = NULL) {
   out
 }
 
-## 推进完整结局（non-TITE）设计的一个队列时间。
-## 参考 TITE-STEIN 实现中 suspension = 1 的定义：必须等当前队列
-## 所有毒性和疗效结局均已确认，才允许对下一队列作出分配决策。
+## Advances cohort timing for the complete-outcome (non-TITE) design.
+## suspension = 1: the next cohort is assigned only once all toxicity and
+## efficacy outcomes of the current cohort are confirmed.
 complete.cohort.timing <- function(
   time_current,
   tox_outcome,
@@ -42,8 +41,9 @@ complete.cohort.timing <- function(
       control$accrual + 1
   }
 
-  ## Complete 模式只使用已确认的二元结局，不额外抽取事件发生时刻。
-  ## 这样不会改变原有完整结局模拟的随机数序列；持续时间按评估窗结束定义。
+  # Complete mode uses confirmed binary outcomes only, no event times are drawn,
+  # so the RNG stream of the original complete-outcome simulation is unchanged;
+  # duration is defined by the end of the assessment window.
   tox_end <- enroll + control$tox_window
   eff_end <- enroll + control$eff_window
 
@@ -60,7 +60,6 @@ complete.cohort.timing <- function(
   )
 }
 
-## 创建时间到事件试验的空患者级状态表。
 new.tite.state <- function() {
   data.frame(
     cohort = integer(),
@@ -76,8 +75,6 @@ new.tite.state <- function() {
   )
 }
 
-## 入组一个队列，并生成其毒性/疗效结局及事件时间。
-## 返回追加了每位新入组患者一行记录的 `state`。
 tite.enroll.cohort <- function(
   state,
   cohort,
@@ -125,8 +122,9 @@ tite.enroll.cohort <- function(
   rbind(state, new_rows)
 }
 
-## 确定最近一个队列之后允许决策的最早时间。
-## 启用暂停时，当前组合的两个终点都必须达到要求的确认比例后才能继续入组。
+## Earliest time at which the next decision may be made after the latest cohort.
+## With suspension, accrual is held until the required confirmation fraction of the
+## current combination is reached for both endpoints.
 tite.next.decision.time <- function(
   state,
   current,
@@ -158,12 +156,10 @@ tite.next.decision.time <- function(
   )
 }
 
-## 汇总中期分析时点的所有患者记录。
-## 每名患者在决策时点的状态按参考实现（fun_TITE_STEIN_update.R 第 3.1 步）
-## 分为三类：已观察到事件（delta = 1）、评估窗结束且无事件（delta = 0）
-## 以及尚未判定（delta = -1）。
-## 返回每个剂量组合的观测计数、各终点有效样本量、疗效结局已判定的例数
-## 和待定结局计数。
+## Summarizes all patient records at an interim decision time.
+## Each patient is classified as event observed (delta = 1), window closed with
+## no event (delta = 0), or not yet adjudicated (delta = -1); pending patients
+## contribute the follow-up fraction follow_up / window to ESS.
 tite.interim <- function(state, time, I, J, control) {
   dims <- c(I, J)
   n_mat <- x_mat <- y_mat <- ess_t <- ess_e <- asc_e <- matrix(0, I, J)
@@ -197,8 +193,8 @@ tite.interim <- function(state, time, I, J, control) {
       tox_no_event_complete[k] + tox_weight[k]
     ess_e[i, j] <- ess_e[i, j] + eff_event_seen[k] +
       eff_no_event_complete[k] + eff_weight[k]
-    ## ESS_e 中权重为 1 的部分：已观察到应答或评估窗结束且无应答；
-    ## 尚未判定的患者不计入。
+    # asc_e: weight-1 part of ESS_e (response observed or window closed without
+    # response); pending patients are excluded.
     asc_e[i, j] <- asc_e[i, j] + eff_event_seen[k] +
       eff_no_event_complete[k]
   }
@@ -231,8 +227,8 @@ tite.interim <- function(state, time, I, J, control) {
   )
 }
 
-## 将患者级状态汇总为完整观测的最终计数矩阵。
-## 返回列表还包含以天为单位的总随访时长。
+## Collapses patient-level state into fully observed final count matrices.
+## `duration` is total follow-up time in days.
 tite.final.counts <- function(state, I, J) {
   n_mat <- x_mat <- y_mat <- matrix(0, I, J)
   for (k in seq_len(nrow(state))) {
@@ -254,13 +250,11 @@ tite.final.counts <- function(state, I, J) {
   )
 }
 
-## 把患者级状态整理成单个试验的过程轨迹表，供过程轨迹图使用。
-## 每位患者一行，记录其所属队列、剂量组合、入组时间、所属队列做出剂量决策
-## 的时刻，以及在该时刻两个终点的判定状态：
-##   tox_state: dlt     已观察到剂量限制性毒性
-##              pending 随访中，毒性观察窗尚未结束（结局待定）
-##              none    观察窗结束且未发生毒性
-##   eff_state: benefit / pending / none，含义同上。
+## Per-patient trajectory table for single-trial trajectory plots: one row per
+## patient with the adjudication status of both endpoints at the decision time
+## of that patient's cohort.
+##   tox_state: dlt (DLT observed) | pending (window still open) | none (window closed, no DLT)
+##   eff_state: benefit | pending | none
 tite.cohort.trace <- function(state, decision_times) {
   if (nrow(state) == 0L) {
     return(NULL)

@@ -1,17 +1,10 @@
-## 敏感性分析图：暂停比例、入组速度、队列大小。
-##
-## 三项敏感性分析共用同一批情景、同一随机种子，基准设置均为
-## AW=(1,2)、入组 1.5 例/月、暂停比例 0.5、队列大小 3。
-## 每项分析输出一张四面板图（选择率 / 患者分配 / 样本量 / 持续时间）
-## 和一份对应的数据表。
-##
-## 柱形与图例的排列与正文图3/图4一致：同一方法的各个设置**相邻**（同一色系的
-## 深浅色成对出现），方法之间再依次排列；图例按列填充，每列是一种方法的深浅色。
-##
-## 运行配置来自 output/sensitivity/runs.csv（由 Comb-STEIN-Code/tmp/run_sensitivity.R 生成）。
-##
-## 用法：Rscript Comb-STEIN-Code/plot/plot_sensitivity.R [项目根目录]
-##       [--manifest=output/sensitivity/runs.csv] [--figure-dir=output/figures]
+## Supplementary sensitivity figures: suspension ratio, accrual rate, cohort size.
+## Same scenarios and seed throughout; baseline AW=(1,2), accrual 1.5/month,
+## suspension ratio 0.5, cohort size 3. Each analysis writes a four-panel figure
+## (selection / allocation / sample size / duration) plus a metrics CSV.
+## Runs are listed in output/sensitivity/runs.csv (Comb-STEIN-Code/tmp/run_sensitivity.R).
+## Usage: Rscript Comb-STEIN-Code/plot/plot_sensitivity.R [project root]
+##        [--manifest=output/sensitivity/runs.csv] [--figure-dir=output/figures]
 
 suppressPackageStartupMessages({
   library(ggplot2)
@@ -19,7 +12,6 @@ suppressPackageStartupMessages({
 
 args <- commandArgs(trailingOnly = TRUE)
 
-## 取出 --name=value 形式的选项，其余位置参数留给调用方。
 .pull.option <- function(args, name) {
   pattern <- paste0("^--", name, "=")
   hit <- grep(pattern, args, value = TRUE)
@@ -56,7 +48,7 @@ manifest_path <- if (is.null(manifest.opt$value)) {
   file.path(project_root, manifest.opt$value)
 }
 if (!file.exists(manifest_path)) {
-  stop("找不到运行清单：", manifest_path, call. = FALSE)
+  stop("Run manifest not found: ", manifest_path, call. = FALSE)
 }
 manifest <- utils::read.csv(manifest_path, stringsAsFactors = FALSE)
 
@@ -74,31 +66,31 @@ panel_labels <- c(
 )
 metric_levels <- names(panel_labels)
 
-## 把基准色按给定比例与白色混合，得到同一色系的浅色变体。
+## Lighten towards white so one method keeps one hue across its settings.
 .mix.white <- function(color, prop) {
   rgb <- grDevices::col2rgb(color)[, 1]
   mixed <- round(rgb + (255 - rgb) * prop)
   grDevices::rgb(mixed[1], mixed[2], mixed[3], maxColorValue = 255)
 }
 
-## 第 k 个设置（共 n 个）的浅化比例：第一个设置最深，最后一个最浅。
+## Whitening fraction of setting k of n: first setting darkest, last lightest.
 .shade_of <- function(k, n) {
   if (n <= 1) 0 else 0.55 * (k - 1) / (n - 1)
 }
 
 .load.run <- function(id, label) {
   hit <- manifest$id == id
-  if (!any(hit)) stop("运行清单缺少配置：", id, call. = FALSE)
+  if (!any(hit)) stop("Run manifest is missing configuration: ", id, call. = FALSE)
   row <- manifest[which(hit)[1], ]
   path <- file.path(project_root, row$run_dir, row$csv)
-  if (!file.exists(path)) stop("找不到运行结果：", path, call. = FALSE)
+  if (!file.exists(path)) stop("Run results not found: ", path, call. = FALSE)
   frame <- utils::read.csv(path, stringsAsFactors = FALSE, check.names = FALSE)
   frame$Run <- row$id
   frame$Setting <- label
   frame
 }
 
-## 三项敏感性分析：entries 的顺序决定颜色深浅（第一项最深）。
+## The three sensitivity analyses; order of `entries` fixes the shade order.
 analyses <- list(
   list(
     name = "suspension",
@@ -131,13 +123,12 @@ analyses <- list(
 )
 
 for (analysis in analyses) {
-  ## 组装长表：每个方法一组颜色，方法内按设置展开。
-  ## 系列顺序与正文图3/图4保持一致：**同一方法的各个设置相邻**（深浅成对），
-  ## 方法之间再依次排列，即 [Comb-STEIN-L 各设置] [Comb-STEIN-H 各设置] [Runin-STEIN 各设置]。
-  ## 注意：展开顺序必须是"方法在外、设置在内"，写成 lapply(entries, ...) 会把
-  ## 同一设置的三根柱形排在一起、深浅色系被拆散，与正文图不一致。
-  ## 这里不能用 outer() 生成：它会把设置下标扩成长向量，而 [[ 收到
-  ## 向量下标时会做递归索引，导致报错。
+  ## Series order must match manuscript Figs 3-4: settings of one method stay
+  ## adjacent (dark/light pair), methods in sequence. So the expansion has to be
+  ## method-outer / setting-inner; lapply(entries, ...) would group the same
+  ## setting together and break the colour pairing.
+  ## outer() cannot be used here: it expands indices into a vector subscript,
+  ## and `[[` does recursive indexing on vector subscripts.
   entry_labels <- vapply(analysis$entries, function(entry) entry$label, character(1))
   series_levels <- unlist(lapply(
     method_levels,
@@ -169,8 +160,8 @@ for (analysis in analyses) {
   scenario_levels <- unique(csv$Scenario[order(scenario_number)])
   long$Scenario <- factor(long$Scenario, levels = scenario_levels)
 
-  ## 配色必须与 series_levels 的顺序**同一口径**（方法在外、设置在内），
-  ## 否则 setNames 会把深浅色错配到别的系列上。
+  ## Colours must be built in the same method-outer / setting-inner order as
+  ## series_levels, otherwise setNames mismatches shades across series.
   series_colors <- setNames(
     unlist(lapply(
       method_levels,
@@ -191,8 +182,8 @@ for (analysis in analyses) {
                labeller = labeller(Metric = panel_labels)) +
     scale_fill_manual(
       values = series_colors, breaks = series_levels, name = "Method",
-      ## byrow = FALSE 让图例按**列**填充：每一列是一种方法的深浅色，
-      ## 与正文图3/图4的图例排法一致（每列上下两根是同色系的深浅两档）。
+      ## byrow = FALSE fills the legend by column, so each column is the
+      ## dark/light pair of one method, as in manuscript Figs 3-4.
       guide = guide_legend(nrow = length(analysis$entries), byrow = FALSE)
     ) +
     scale_y_continuous(

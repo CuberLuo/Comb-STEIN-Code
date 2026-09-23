@@ -1,20 +1,13 @@
-## 延迟（TITE）与完整结局（non-TITE）操作特征对比图。
+## Operating characteristics of delayed (TITE) vs complete (non-TITE) outcomes for
+## Selection / Patient / Sample / Duration, from the latest combined results in output/.
+## Two bars per method: dark = complete outcomes, light = TITE.
 ##
-## 读取 output/ 下最新一次 TITE 与完整结局运行的合并结果，绘制
-## Selection、Patient、Sample、Duration 四个指标的对比图。
-##
-## 图形风格与论文图3/图4保持一致：
-##   * 横轴为情景（S1-S12），每个情景内三种方法各两根柱形；
-##   * 深色柱形为完整结局（non-TITE），浅色柱形为 TITE 扩展；
-##   * 图例为两行三列，每列对应一种方法，上行为非 TITE、下行为 TITE。
-##
-## 用法：Rscript Comb-STEIN-Code/plot/plot_delay_comparison.R [项目根目录]
+## Usage: Rscript Comb-STEIN-Code/plot/plot_delay_comparison.R [project root]
 ##       [--complete-run=output/run_...] [--tite-run=output/run_...]
 ##       [--out=fig_delay_comparison_metrics]
 ##
-## 默认按时间戳自动选取 output/ 下最新的两次运行；当同一批实验包含多个
-## 设置（例如 AW=(1,2) 与 AW=(2,3) 的敏感性分析）时，必须用
-## --complete-run / --tite-run 明确指定要画的那两次运行。
+## Default: newest run of each delay setting under output/. When one batch holds
+## several settings (e.g. AW=(1,2) vs AW=(2,3)), pass --complete-run/--tite-run.
 
 suppressPackageStartupMessages({
   library(ggplot2)
@@ -22,7 +15,6 @@ suppressPackageStartupMessages({
 
 args <- commandArgs(trailingOnly = TRUE)
 
-## 从参数列表中取出 --name=value 形式的选项，其余位置参数留给调用方。
 .pull.option <- function(args, name) {
   pattern <- paste0("^--", name, "=")
   hit <- grep(pattern, args, value = TRUE)
@@ -54,7 +46,6 @@ out_name <- if (is.null(out.opt$value)) {
   out.opt$value
 }
 
-## 把 --complete-run / --tite-run 给出的目录解析为合并结果 CSV 的路径。
 .run.csv <- function(run_dir, delay) {
   path <- if (grepl("^(/|[A-Za-z]:)", run_dir)) {
     run_dir
@@ -70,7 +61,7 @@ out_name <- if (is.null(out.opt$value)) {
     }
   )
   if (!file.exists(file)) {
-    stop("找不到 ", delay, " 的运行结果：", file, call. = FALSE)
+    stop("Run results not found for ", delay, ": ", file, call. = FALSE)
   }
   file
 }
@@ -82,7 +73,7 @@ dir.create(figure_dir, showWarnings = FALSE, recursive = TRUE)
 method_levels <- c("Comb-STEIN-L", "Comb-STEIN-H", "Runin-STEIN")
 delay_levels <- c("Complete", "TITE")
 
-## 与论文图3/图4完全相同的配色：深色为完整结局，浅色为 TITE。
+## Same palette as manuscript Figs 3/4: dark = complete outcomes, light = TITE.
 method_colors <- c(
   "Comb-STEIN-L" = "#1973B0",
   "Comb-STEIN-H" = "#769658",
@@ -94,7 +85,7 @@ tite_colors <- c(
   "Runin-STEIN"  = "#DEC2AF"
 )
 
-## 图例标签沿用论文中的命名习惯（TITE 版本加 TITE- 前缀）。
+## Legend labels follow the manuscript naming; the TITE variants get a TITE- prefix.
 method_labels <- c(
   "Comb-STEIN-L" = "Comb-STEIN-L",
   "Comb-STEIN-H" = "Comb-STEIN-H",
@@ -106,13 +97,12 @@ tite_labels <- c(
   "Runin-STEIN"  = "TITE-Runin-STEIN"
 )
 
-## 每个情景内共 3 种方法 x 2 种结局 = 6 根柱形。
-## ggplot2 会把 position_dodge(width=) 视为整组总宽度并按系列数均分，
-## 因此这里把单根柱宽表示为组宽的比例。
+## Six bars per scenario (3 methods x 2 outcome modes). ggplot2 treats
+## position_dodge(width=) as the width of the whole group and splits it across the
+## series, so the bar width is expressed as a fraction of the group width.
 group_width <- 0.88
 bar_fraction <- 0.85
 
-## 找出 output/ 下所有合并结果文件，并按延迟设置保留最新一次运行。
 discover_runs <- function(output_root) {
   files <- list.files(
     output_root,
@@ -123,15 +113,15 @@ discover_runs <- function(output_root) {
   if (length(files) == 0) {
     stop("No combined result CSV found under ", output_root, call. = FALSE)
   }
-  ## 时间戳包含日期和时间（run_YYYYMMDD_HHMMSS），必须整体捕获，
-  ## 否则同一天内先后两次运行会被当成同一个运行。
+  ## run_YYYYMMDD_HHMMSS includes the time; capture it as a whole, otherwise two
+  ## runs on the same day collapse into one.
   run_stamp <- sub(".*run_([0-9]+(_[0-9]+)?).*", "\\1", files)
   run_stamp[!grepl("run_[0-9]+", files)] <- "0"
   frames <- lapply(files, function(path) {
     utils::read.csv(path, stringsAsFactors = FALSE, check.names = FALSE)
   })
-  ## 时间戳按文件逐一写回，不能先 rbind 再整体赋值：那样 R 会按行循环
-  ## 复用长度等于文件数的时间戳向量，把每个文件的标记写错。
+  ## Stamps are written per file before rbind: assigning after rbind recycles the
+  ## length-n_files vector along the rows and mislabels each frame.
   stamped <- Map(
     function(frame, stamp) {
       frame$.run_stamp <- stamp
@@ -151,12 +141,12 @@ if (length(missing_cols) > 0) {
   stop("Missing columns: ", paste(missing_cols, collapse = ", "), call. = FALSE)
 }
 
-## 每个延迟设置只保留时间戳最新的运行，避免历史目录重复计入。
+## Keep only the newest run per delay setting, so stale directories are not counted twice.
 raw <- raw[order(raw$.run_stamp, decreasing = TRUE), ]
 raw <- raw[!duplicated(raw[c("Scenario", "Method", "Delay")]), ]
 
-## 显式指定的运行会整段替换自动发现的结果，避免同一 Delay 下混入
-## 不同设置的运行（例如 AW=(1,2) 与 AW=(2,3)）。
+## An explicit run replaces the whole auto-discovered block of that Delay, so runs
+## from different settings (e.g. AW=(1,2) vs AW=(2,3)) never mix.
 .replace.delay <- function(raw, delay, run_dir) {
   frame <- utils::read.csv(
     .run.csv(run_dir, delay),
@@ -175,9 +165,10 @@ if (!is.null(tite.opt$value)) {
 }
 raw$.run_stamp <- NULL
 
-## 情景按编号排序（S1、S2、...、S12；真实案例则按 C1、C2、... 排）。
-## 前缀同时接受 S 与 C：真实案例情景的编号是 C1-C6，若只剥 S 会全部得到 NA，
-## order() 就会退回原始出现顺序，图形里的情景次序将取决于文件扫描顺序。
+## Scenarios are ordered by number (S1...S12, or C1...C6 for case studies). The
+## prefix must accept both S and C: stripping only S gives NA for the case
+## studies, order() falls back to the original order, and the scenario order in
+## the figure then depends on directory scan order.
 scenario_number <- as.integer(sub("^[SC]", "", raw$Scenario))
 raw$Scenario <- factor(
   raw$Scenario,
@@ -199,10 +190,9 @@ if (nrow(raw) != expected_rows) {
   )
 }
 
-## 数据表与图片使用同一组文件名：图片为 <out_name>.png，
-## 数据表去掉 fig_ 前缀后加 _metrics.csv（保持既有文件名不变）。
-## 数据表名去掉 fig_ 前缀后加 _metrics.csv。out_name 本身就以 _metrics 结尾时
-## 先去掉这个后缀，避免出现 ..._metrics_metrics.csv。
+## Figure is <out_name>.png; the data table drops the fig_ prefix and appends
+## _metrics.csv, which keeps the existing file names. A trailing _metrics in
+## out_name is stripped first to avoid ..._metrics_metrics.csv.
 data_base <- sub("_metrics$", "", sub("^fig_", "", out_name))
 data_path <- file.path(figure_dir, paste0(data_base, "_metrics.csv"))
 
@@ -213,8 +203,8 @@ write.csv(
   row.names = FALSE
 )
 
-## 系列顺序决定柱形与图例的排列：同一方法的两根柱形相邻，
-## 且完整结局在前、TITE 在后。
+## Series order fixes both the bar and the legend order: the two bars of a method
+## sit adjacent, complete outcomes first, then TITE.
 series_levels <- as.vector(t(outer(
   method_levels, delay_levels,
   function(method, delay) paste(method, delay, sep = "\n")

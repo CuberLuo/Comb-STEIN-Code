@@ -1,5 +1,5 @@
-## 12 个 CombSTEIN 模拟场景，数值来自 Scenario_CombSTEIN.xlsx 的 Sheet1。
-## 每个场景保存为毒性概率矩阵 pT 和疗效概率矩阵 pE。
+## 12 CombSTEIN simulation scenarios; values from Scenario_CombSTEIN.xlsx Sheet1.
+## Each scenario is a toxicity matrix pT and an efficacy matrix pE.
 
 mk <- function(values, nrow) {
   matrix(values, nrow = nrow, byrow = TRUE)
@@ -102,8 +102,8 @@ ncol_map <- vapply(scenarios, function(s) ncol(s$pT), integer(1))
 build.pTpE <- function(name) {
   key <- as.character(name)
   if (key %in% names(scenarios)) return(scenarios[[key]])
-  ## 真实案例情景保存在 Comb-STEIN-Code/scenarios_case_study.R 中，未并入默认列表，
-  ## 但显式按名字请求（例如 main.R C1）时同样可以取用。
+  ## Case-study scenarios live in scenarios_case_study.R and are excluded from the
+  ## default list, but remain reachable by explicit name (e.g. main.R C1).
   if (exists("case.study.scenarios", inherits = TRUE) &&
       key %in% names(case.study.scenarios)) {
     return(case.study.scenarios[[key]])

@@ -1,5 +1,6 @@
-## 使用完整或延迟数据模拟一次 Comb-STEIN 试验。
-## 返回分配计数、结局、选定组合、停止指标和试验时长。
+## Simulates one Comb-STEIN trial under complete outcomes, dispatching to the
+## TITE implementation when delayed outcomes are requested.
+## Returns allocation counts, outcomes, selected combination, stopping flags and duration.
 simulate.trial.comb.stein <- function(
   pT,
   pE,
@@ -9,7 +10,6 @@ simulate.trial.comb.stein <- function(
   trace = FALSE
 ) {
   method <- match.arg(method)
-  ## 延迟结局模式使用单独的 TITE 实现；这里先完成分流。
   if (isTRUE(delayed)) {
     return(simulate.trial.comb.stein.tite(
       pT,
@@ -20,19 +20,16 @@ simulate.trial.comb.stein <- function(
     ))
   }
   delay.control <- normalize.delay.control(delay.control)
-  ## I、J 是剂量网格的行数和列数。
-  ## 每个剂量组合预计入组 COHORTS_PER_COMBINATION 个队列，
-  ## 因此总队列数由剂量组合数量决定。
+  # COHORTS_PER_COMBINATION cohorts are planned per dose combination.
   I <- nrow(pT)
   J <- ncol(pT)
   ncohort <- I * J * COHORTS_PER_COMBINATION
-  ## x_mat：毒性事件数；y_mat：疗效事件数；n_mat：入组人数。
-  ## admissible 表示当前仍然允许使用的剂量组合。
+  # x_mat / y_mat / n_mat: toxicity events, efficacy events, enrolled patients.
+  # admissible: combinations still allowed for use.
   x_mat <- y_mat <- n_mat <- matrix(0, I, J)
   admissible <- matrix(TRUE, I, J)
 
-  ## CombSTEIN-H 从最高剂量开始，CombSTEIN-L 从最低剂量开始。
-  ## current 保存当前剂量组合的行、列坐标。
+  # CombSTEIN-H starts at the highest dose, CombSTEIN-L at the lowest.
   current <- if (method == "CombSTEIN-H") {
     c(I, J)
   } else {
@@ -42,40 +39,30 @@ simulate.trial.comb.stein <- function(
   earlystop_no_candidate <- FALSE
   time_current <- 0
   duration <- 0
-  ## trace = TRUE 时逐队列记录分配到的剂量组合、入组时间和队列结局，
-  ## 供单个试验的过程轨迹图使用；默认不记录，避免影响正常模拟的开销。
+  # trace: per-cohort records for single-trial trajectory plots; NULL otherwise.
   cohort.trace <- if (trace) vector("list", ncohort) else NULL
 
   for (cohort in seq_len(ncohort)) {
-    ## 每次循环模拟一个队列，并在队列结束后进行一次剂量决策。
     debug.cat("current:", current, "\n")
     i <- current[1]
     j <- current[2]
 
-    ## 根据当前剂量组合真实的毒性率和疗效率，
-    ## 为队列中的每位患者随机生成毒性和疗效结局。
     tox_outcome <- as.integer(runif(cohortsize) < pT[i, j])
     eff_outcome <- as.integer(runif(cohortsize) < pE[i, j])
-    # debug.cat("tox_outcome:",tox_outcome,"\n")
-    # debug.cat("eff_outcome:",eff_outcome,"\n")
-    wT <- sum(tox_outcome)#当前cohort出现毒性的人数
-    wE <- sum(eff_outcome)#当前cohort出现疗效的人数
+    wT <- sum(tox_outcome)
+    wE <- sum(eff_outcome)
     debug.cat("wT:", wT, "\n")
     debug.cat("wE:", wE, "\n")
     x_mat[i, j] <- x_mat[i, j] + wT
     y_mat[i, j] <- y_mat[i, j] + wE
     n_mat[i, j] <- n_mat[i, j] + cohortsize
-    # debug.cat("x_mat:","\n")
-    # debug.print(x_mat)
-    # debug.cat("y_mat:","\n")
-    # debug.print(y_mat)
-    # debug.cat("n_mat:","\n")
-    # debug.print(n_mat)
     timing <- complete.cohort.timing(
       time_current, tox_outcome, eff_outcome, delay.control
     )
-    time_current <- timing$next_time#完成评估且下一队列可以开始入组的最早时间
-    duration <- timing$duration#当前已入组患者完成全部评估的时间
+    # next_time: earliest time the next cohort may start enrolling (days).
+    time_current <- timing$next_time
+    # duration: time until all enrolled patients complete assessment (days).
+    duration <- timing$duration
 
     if (trace) {
       cohort.trace[[cohort]] <- data.frame(
@@ -92,19 +79,16 @@ simulate.trial.comb.stein <- function(
       )
     }
 
-    ## 更新可接受剂量集合：超毒性组合及其右上方向可能被排除，
-    ## 疗效不足的组合会被排除。
+    # overly toxic combinations (and those up/right of them) and inefficacious ones are dropped
     admissible <- update.admissible(x_mat, y_mat, n_mat, admissible)
-    # cat("admissible:\n")
-    # print(admissible)
     if (!any(admissible)) {
-      ## 如果没有任何可接受剂量，试验因毒性规则停止。
+      # no admissible combination left => stop for toxicity
       earlystop_tox <- TRUE
       break
     }
 
-    ## 当前剂量组合达到最少疗效观察人数，且疗效超过停止阈值时，
-    ## 试验因疗效充分而提前停止。
+    # early stop for sufficient efficacy: needs EFF_STOP_N patients and
+    # P(efficacy rate > EFF_STOP_CUT) > EFF_STOP_PROB
     if (
       n_mat[i, j] >= EFF_STOP_N &&
         pr.eff.gt(y_mat[i, j], n_mat[i, j], EFF_STOP_CUT) > EFF_STOP_PROB
@@ -114,11 +98,10 @@ simulate.trial.comb.stein <- function(
 
     if (cohort == ncohort) break
 
-    ## Comb-STEIN 每次都在当前剂量的局部候选集合中选择下一剂量。
+    # local candidate set from the current toxicity estimate, then intersect with admissible;
+    # empty => stay at current dose, or stop if it is itself inadmissible
     p_ij_hat <- x_mat[i, j] / n_mat[i, j]
-    # 筛选1：根据当前毒性概率得到 2剂量/5剂量 局部候选集
     candidates <- alt.set.C(i, j, I, J, p_ij_hat)
-    # 筛选2：局部候选集∩可接受集
     candidates <- Filter(
       function(ij) admissible[ij[1], ij[2]],
       candidates
@@ -142,7 +125,6 @@ simulate.trial.comb.stein <- function(
     final.selection(x_mat, y_mat, n_mat, admissible)
   }
 
-  ## 返回一次试验的全部信息，供 run.scenario() 汇总多个重复试验。
   list(
     sel = selected,
     x = x_mat,
@@ -155,8 +137,8 @@ simulate.trial.comb.stein <- function(
   )
 }
 
-## 运行一次 STEIN 试验的时间到事件版本。
-## `delay.control` 必须已经由 `normalize.delay.control()` 规范化。
+## Time-to-event (TITE) version of the STEIN trial.
+## `delay.control` must already be normalized by `normalize.delay.control()`.
 simulate.trial.comb.stein.tite <- function(
   pT,
   pE,
@@ -164,15 +146,13 @@ simulate.trial.comb.stein.tite <- function(
   delay.control,
   trace = FALSE
 ) {
-  ## TITE 版本与完整结局版本使用相同的剂量移动规则，
-  ## 但每次决策前先根据随访进度计算有效样本量。
+  # same dose-moving rules as the complete-outcome version, but each decision is
+  # based on effective sample sizes computed from current follow-up
   I <- nrow(pT)
   J <- ncol(pT)
   ncohort <- I * J * COHORTS_PER_COMBINATION
-  ## state 保存每位患者的入组时间、结局观察时间和当前状态。
   state <- new.tite.state()
   admissible <- matrix(TRUE, I, J)
-  ## H 版本从最高剂量开始，L 版本从最低剂量开始。
   current <- if (method == "CombSTEIN-H") {
     c(I, J)
   } else {
@@ -181,12 +161,10 @@ simulate.trial.comb.stein.tite <- function(
   time_current <- 0
   earlystop_tox <- FALSE
   earlystop_no_candidate <- FALSE
-  ## 逐队列的记录时间：第 k 个队列是在 decision_times[k] 做出下一步决策的。
-  ## 它对应过程轨迹图里每一个队列的观测时刻。
+  # decision_times[k]: time at which cohort k's dose decision is made
   decision_times <- numeric(0)
 
   for (cohort in seq_len(ncohort)) {
-    ## 入组当前队列，并按照延迟结局机制推进试验时间。
     i <- current[1]
     j <- current[2]
     state <- tite.enroll.cohort(
@@ -199,7 +177,6 @@ simulate.trial.comb.stein.tite <- function(
       cohortsize,
       delay.control
     )
-    ## 找到当前队列完成后可以进行下一次决策的时间点。
     decision_time <- tite.next.decision.time(
       state,
       current,
@@ -207,12 +184,10 @@ simulate.trial.comb.stein.tite <- function(
       cohortsize,
       delay.control
     )
-    ## 在决策时刻计算每个剂量组合的有效毒性/疗效样本量和事件数。
     interim <- tite.interim(state, decision_time, I, J, delay.control)
     time_current <- decision_time
     decision_times[cohort] <- decision_time
 
-    ## 用有效样本量执行与完整结局版本相同的监测和可接受性更新。
     admissible <- update.admissible(
       interim$x,
       interim$y,
@@ -221,14 +196,14 @@ simulate.trial.comb.stein.tite <- function(
       n_eff = interim$ess_e
     )
     if (!any(admissible)) {
-      ## 所有组合都不可接受，因毒性停止。
+      # no admissible combination left => stop for toxicity
       earlystop_tox <- TRUE
       break
     }
 
-    ## 疗效充分性判定只使用已经判定的疗效结局（参考实现第 3.1 步的
-    ## delta_e 分类）。尚未判定的结局不进入分子，也不按有效样本量的
-    ## 权重折算成分母，否则疗效证据会被系统性压低，提前终止几乎不触发。
+    # Efficacy stopping uses only adjudicated outcomes (delta_e of ref impl step 3.1):
+    # pending outcomes enter neither the numerator nor the ESS-weighted denominator,
+    # otherwise efficacy evidence is deflated and early stopping almost never fires.
     if (
       interim$asc_e[i, j] >= EFF_STOP_N &&
         pr.eff.gt(
@@ -241,10 +216,8 @@ simulate.trial.comb.stein.tite <- function(
     }
     if (cohort == ncohort) break
 
-    ## 用有效毒性样本量估计当前组合的毒性率，
-    ## 决定下一步允许探索的方向。
+    # toxicity rate from ESS_t decides which directions may be explored next
     p_ij_hat <- interim$x[i, j] / interim$ess_t[i, j]
-    ## 从当前组合的局部邻域中选择后验疗效最优的组合。
     candidates <- alt.set.C(i, j, I, J, p_ij_hat)
     candidates <- Filter(
       function(ij) admissible[ij[1], ij[2]],
@@ -261,7 +234,6 @@ simulate.trial.comb.stein.tite <- function(
     current <- pick.best.by.eff(candidates, interim$y, interim$ess_e)
   }
 
-  ## 试验结束后，将所有患者的最终随访结果整理成完整计数矩阵。
   final <- tite.final.counts(state, I, J)
   selected <- if (earlystop_tox || earlystop_no_candidate) {
     c(NA_integer_, NA_integer_)
@@ -269,7 +241,6 @@ simulate.trial.comb.stein.tite <- function(
     final.selection(final$x, final$y, final$n, admissible)
   }
 
-  ## 返回最终计数、选择结果和试验持续时间。
   list(
     sel = selected,
     x = final$x,

@@ -1,22 +1,21 @@
-## Comb-STEIN 命令行入口和公共函数加载器。
+## Comb-STEIN command-line entry point and module loader.
 ##
-## 用法：
-##   Rscript main.R
-##   Rscript main.R S1 S2 S3 50
-##   Rscript main.R S1 50 --delayed=true
-##   Rscript main.R S1 50 --tite --accrual=10 --tox-window=30
+## Usage:
+##   Rscript Comb-STEIN-Code/main.R
+##   Rscript Comb-STEIN-Code/main.R S1 S2 S3 50
+##   Rscript Comb-STEIN-Code/main.R S1 50 --delayed=true
+##   Rscript Comb-STEIN-Code/main.R S1 50 --tite --accrual=10 --tox-window=30
 ##     --eff-window=90 --suspension=0.5
-##   Rscript main.R S1 50 --workers=4
-##   Rscript main.R S1 50 --quiet
+##   Rscript Comb-STEIN-Code/main.R S1 50 --workers=4
+##   Rscript Comb-STEIN-Code/main.R S1 50 --quiet
 ##
-## 每次命令行运行都会在 output 下创建新的时间戳文件夹，
+## Each run writes into a new timestamped folder under output/.
 
-## 定位包含入口脚本的目录。优先使用 source 框架中的路径，
-## 再依次回退到 Rscript 的 --file 参数和当前工作目录。
-## 返回规范化的绝对路径。
+## Locate the directory holding this script: source() frame, then Rscript
+## --file, then the working directory.
 .comb_stein_script_dir <- function() {
-  ## RStudio 的 debugSource() 可能在调用栈中加入一个工作目录路径，
-  ## 因此不能盲目使用最后一个 sys.frames()$ofile。
+  ## RStudio's debugSource() can push a working-directory path onto the stack,
+  ## so don't blindly take the last sys.frames()$ofile.
   frame.files <- vapply(
     sys.frames(),
     function(frame) {
@@ -31,7 +30,7 @@
       function(path) dirname(normalizePath(path, mustWork = TRUE)),
       character(1)
     ))
-    ## 选择真正包含本脚本模块的目录，例如 Comb-STEIN-Code/，而不是项目根目录。
+    ## Prefer a dir that really holds the modules (Comb-STEIN-Code/), not the project root.
     valid.dir <- frame.dirs[file.exists(file.path(frame.dirs, "config.R"))]
     if (length(valid.dir) > 0) return(valid.dir[length(valid.dir)])
   }
@@ -49,7 +48,7 @@
   if (file.exists(file.path(working.dir, "Comb-STEIN-Code", "config.R"))) {
     return(normalizePath(file.path(working.dir, "Comb-STEIN-Code"), mustWork = TRUE))
   }
-  stop("无法定位 main.R 所在目录：未找到 config.R")
+  stop("Cannot locate the directory of main.R: config.R not found")
 }
 
 .comb_stein_root <- .comb_stein_script_dir()
@@ -76,7 +75,6 @@ for (.comb_stein_module in .comb_stein_modules) {
   )
 }
 
-## 将一个剂量矩阵格式化为便于直接查看的文本。
 .format.dose.matrix <- function(x, digits = 2) {
   if (is.null(dim(x))) return(format(round(x, digits), nsmall = digits))
   rows <- apply(x, 1, function(row) {
@@ -85,7 +83,6 @@ for (.comb_stein_module in .comb_stein_modules) {
   paste(rows, collapse = "\n")
 }
 
-## 生成每个场景的详细 TXT 报告，包含每个剂量组合的百分比矩阵。
 .write.scenario.txt <- function(path, name, result, pT, pE, ntrial) {
   details <- attr(result, "dose.details")
   true.ij <- attr(result, "true.obdcs")
@@ -134,16 +131,13 @@ for (.comb_stein_module in .comb_stein_modules) {
   writeLines(lines, path, useBytes = TRUE)
 }
 
-## 将命令行中的布尔值写法转换为单个逻辑值。
-## `option` 仅用于生成明确的校验错误信息。
+## `option` is kept for error reporting only.
 .parse.cli.boolean <- function(value, option) {
   value <- tolower(as.character(value)[1])
   if (value %in% c("true", "t", "1", "yes", "y")) return(TRUE)
   FALSE
 }
 
-## 从 `args` 中移除一个 --option=value 参数。
-## 同时返回解析后的值（或 `default`）以及未消费的参数。
 .pull.cli.option <- function(args, option, default = NULL) {
   pattern <- paste0("^--", option, "=")
   hits <- grep(pattern, args)
@@ -154,8 +148,7 @@ for (.comb_stein_module in .comb_stein_modules) {
   )
 }
 
-## 使用开始时间在 `output.root` 下创建唯一的运行目录。
-## 如果同一时间戳已被占用，则追加数字后缀。
+## Appends a numeric suffix when the timestamp folder is already taken.
 .create.timestamped.results.dir <- function(
   output.root,
   started.at = Sys.time()
@@ -179,32 +172,26 @@ for (.comb_stein_module in .comb_stein_modules) {
   }
 }
 
-## 解析命令行参数，运行指定的模拟场景并保存 CSV 文件。
-## 不可见地返回合并结果表；程序化调用者可用 `results.dir` 覆盖
-## 默认的时间戳输出目录。
+## Runs the requested scenarios and writes CSV/TXT reports; returns the
+## combined table invisibly. `results.dir` overrides the timestamped default.
 run.comb.stein.cli <- function(
   args = commandArgs(trailingOnly = TRUE),
   results.dir = NULL
 ) {
-  ## 记录本次运行的开始时间。这个时间既用于屏幕输出，
-  ## 也用于生成本次运行专属的结果文件夹名称。
   run.started.at <- Sys.time()
   if (is.null(results.dir)) {
-    ## 如果没有指定输出目录，就在项目根目录的 output/ 下
-    ## 自动创建一个带时间戳的文件夹，避免覆盖以前的结果。
+    ## Timestamped folder under output/ so earlier runs are not overwritten.
     results.dir <- .create.timestamped.results.dir(
       file.path(.comb_stein_project_root, "output"),
       run.started.at
     )
   } else {
-    ## 程序化调用时也可以手动指定输出目录。
-    ## 如果目录不存在，则递归创建；normalizePath() 用于得到绝对路径。
     dir.create(results.dir, showWarnings = FALSE, recursive = TRUE)
     results.dir <- normalizePath(results.dir, mustWork = TRUE)
   }
 
-  ## --quiet 只关闭模拟过程中的中间调试信息，
-  ## 不影响运行摘要、utility 矩阵或最终结果表。
+  ## --quiet silences interim simulation output only; summary, utility matrix
+  ## and result tables still print.
   quiet.flag <- .pull.cli.option(args, "quiet", NULL)
   args <- quiet.flag$args
   quiet <- !is.null(quiet.flag$value) &&
@@ -215,17 +202,14 @@ run.comb.stein.cli <- function(
   }
   options(comb.stein.quiet = quiet)
 
-  ## 固定随机种子，使同样的参数能够得到可重复的模拟结果。
+  ## Fixed seed so identical arguments give reproducible results.
   set.seed(DEFAULT_SEED)
-  ## 输出本次运行的基本信息和由设计参数推导出的两个阈值：
-  ## phi 是毒性阈值，psi 是疗效阈值。
+  ## phi: toxicity cutoff, psi: efficacy cutoff, both derived from config.
   cat("Run started:", format(run.started.at, "%Y-%m-%d %H:%M:%S %Z"), "\n")
   cat("Output folder:", results.dir, "\n")
   cat(sprintf("Derived toxicity cutoff  phi = %.4f\n", phi))
   cat(sprintf("Derived efficacy  cutoff psi = %.4f\n", psi))
 
-  ## 默认每个场景重复的试验次数。
-  ## 如果命令行中提供了数字，后面会用该数字覆盖默认值。
   ntrial <- DEFAULT_NTRIAL
   workers <- DEFAULT_WORKERS
   workers.flag <- .pull.cli.option(args, "workers", NULL)
@@ -234,26 +218,21 @@ run.comb.stein.cli <- function(
     workers <- as.integer(workers.flag$value)
   }
 
-  ## delayed = FALSE 表示使用完整结局；
-  ## delayed = TRUE 表示启用 TITE/延迟结局模拟。
-  ## 默认采用完整结局，只有明确指定参数时才启用延迟结局。
+  ## delayed = TRUE switches to TITE/delayed outcomes; default is complete outcomes.
   delayed <- FALSE
   delayed.flag <- .pull.cli.option(args, "delayed", NULL)
   args <- delayed.flag$args
   if (!is.null(delayed.flag$value)) {
-    ## 处理 --delayed=true 或 --delayed=false 形式的参数。
     delayed <- .parse.cli.boolean(delayed.flag$value, "--delayed")
   }
-  ## 也支持更简洁的开关形式 --tite 和 --no-tite。
+  ## --tite / --no-tite shorthand; dropped from args so they are not read as scenario names.
   has.tite <- "--tite" %in% args
   has.no.tite <- "--no-tite" %in% args
-  ## 读取开关的值后，从参数列表中删除它们，避免被误判为场景名称。
   if (has.tite) delayed <- TRUE
   if (has.no.tite) delayed <- FALSE
   args <- args[!args %in% c("--tite", "--no-tite")]
 
-  ## delay.control 保存延迟结局相关的设置。
-  ## 先建立“命令行参数名 -> R 内部名称”的对应关系。
+  ## Maps CLI option names to internal delay.control names.
   delay.control <- list()
   numeric.options <- c(
     accrual = "accrual",
@@ -262,8 +241,6 @@ run.comb.stein.cli <- function(
     suspension = "suspension"
   )
   for (option in names(numeric.options)) {
-    ## 读取数值型延迟参数，例如：
-    ## --accrual=10、--tox-window=30、--eff-window=90。
     pulled <- .pull.cli.option(args, option, NULL)
     args <- pulled$args
     if (!is.null(pulled$value)) {
@@ -276,8 +253,6 @@ run.comb.stein.cli <- function(
     `accrual-random` = "accrual_random"
   )
   for (option in names(logical.options)) {
-    ## 读取逻辑型延迟参数，例如：
-    ## --use-suspension=true 或 --accrual-random=false。
     pulled <- .pull.cli.option(args, option, NULL)
     args <- pulled$args
     if (!is.null(pulled$value)) {
@@ -285,10 +260,10 @@ run.comb.stein.cli <- function(
         .parse.cli.boolean(pulled$value, paste0("--", option))
     }
   }
-  ## Complete 和 TITE 都使用同一套入组速度与评估窗计算试验持续时间。
+  ## Accrual rate and assessment windows apply to both complete and TITE modes.
   delay.control <- normalize.delay.control(delay.control)
 
-  ## 读取要运行的方法。多个方法使用逗号分隔。
+  ## Methods may be given as a comma-separated list.
   methods.flag <- .pull.cli.option(args, "methods", NULL)
   args <- methods.flag$args
   methods <- c(
@@ -302,9 +277,8 @@ run.comb.stein.cli <- function(
     )
   }
 
-  ## 队列入组人数默认取 config.R 中的 cohortsize。
-  ## 敏感性分析需要比较不同队列大小，因此这里允许用 --cohort-size 覆盖。
-  ## 模拟函数在全局环境中查找 cohortsize，所以必须在全局环境赋值。
+  ## Simulation code reads `cohortsize` from the global env, so the override
+  ## must be assigned there.
   cohort.size.flag <- .pull.cli.option(args, "cohort-size", NULL)
   args <- cohort.size.flag$args
   if (!is.null(cohort.size.flag$value)) {
@@ -312,18 +286,15 @@ run.comb.stein.cli <- function(
       as.integer(cohort.size.flag$value)
     )
     if (is.na(cohort.size.value) || cohort.size.value < 1L) {
-      stop("--cohort-size 必须是正整数", call. = FALSE)
+      stop("--cohort-size must be a positive integer", call. = FALSE)
     }
     assign("cohortsize", cohort.size.value, envir = globalenv())
     cat(sprintf("Cohort size overridden to %d\n", cohortsize))
   }
 
-  ## 默认运行 scenarios.R 中定义的全部场景。
-  ## 用户也可以在命令行中指定一个或多个场景名称。
+  ## Defaults to all scenarios; numeric args set ntrial, others name scenarios.
   scenarios.to.run <- names(scenarios)
   if (length(args) > 0) {
-    ## 数字参数解释为每个场景的重复次数，例如：main.R S1 S2 50。
-    ## 非数字参数解释为场景名称，例如 S1、S2。
     is.numeric.arg <- suppressWarnings(!is.na(as.numeric(args)))
     if (any(is.numeric.arg)) {
       ntrial <- as.numeric(args[is.numeric.arg])[1]
@@ -332,7 +303,6 @@ run.comb.stein.cli <- function(
     if (length(scenario.args) > 0) scenarios.to.run <- scenario.args
   }
 
-  ## 在正式开始模拟前，把实际采用的延迟设置打印出来，方便核对。
   if (delayed) {
     cat(sprintf(
       paste0(
@@ -357,16 +327,12 @@ run.comb.stein.cli <- function(
     ))
   }
 
-  ## 用于保存所有场景的汇总结果。
   all.results <- NULL
 
   for (name in scenarios.to.run) {
-    ## 每个场景都会调用 run.scenario()，运行 methods 中指定的方法。
-    ## OBDC 定义为与最大 utility 相差不超过配置阈值的组合。
+    ## OBDC = combinations within the configured utility tolerance of the maximum.
     cat("Running scenario", name, "with ntrial =", ntrial, "...\n")
 
-    ## 在模拟开始前打印当前场景由真实毒性率和疗效率计算的效用矩阵。
-    ## 行、列标签与剂量组合坐标 (i, j) 一致。
     scenario.truth <- build.pTpE(name)
     true.utility <- get.true.utility(scenario.truth$pT, scenario.truth$pE)
     dimnames(true.utility) <- list(
@@ -382,7 +348,6 @@ run.comb.stein.cli <- function(
     )
     print(utility.display, quote = FALSE)
 
-    # *****执行scenario*****
     result <- run.scenario(
       name,
       ntrial = ntrial,
@@ -391,8 +356,7 @@ run.comb.stein.cli <- function(
       workers = workers,
       methods = methods
     )
-    ## run.scenario() 将当前场景的真实 OBDC 保存为结果属性。
-    ## true.ij 是一个两列矩阵，每一行表示一个并列的最优组合 (行, 列)。
+    ## true.ij: two-column matrix, one row per tied optimal combination (row, column).
     true.ij <- attr(result, "true.obdcs")
     labels <- apply(
       true.ij,
@@ -406,7 +370,6 @@ run.comb.stein.cli <- function(
       sep = ""
     )
 
-    ## 每个场景单独保存一个 CSV 文件，便于后续单独查看。
     scenario.outfile <- file.path(
       results.dir,
       paste0(
@@ -439,15 +402,12 @@ run.comb.stein.cli <- function(
       ntrial
     )
     cat("  scenario details saved to", scenario.txtfile, "\n")
-    ## 同时把当前场景追加到总结果表中。
     all.results <- rbind(all.results, result)
   }
 
-  ## 打印所有场景的汇总表。
   cat("\n\n===================== Table 2 simulation =====================\n")
   print(all.results, row.names = FALSE)
 
-  ## 将所有场景合并后的结果保存为一个总 CSV 文件。
   outfile <- file.path(
     results.dir,
     paste0(
@@ -459,7 +419,6 @@ run.comb.stein.cli <- function(
   )
   write.csv(all.results, outfile, row.names = FALSE)
   cat("\nResults saved to", outfile, "\n")
-  ## 返回结果但不自动打印一遍，方便其他 R 函数接收并继续处理。
   invisible(all.results)
 }
 

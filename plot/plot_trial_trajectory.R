@@ -1,22 +1,9 @@
-## 单次组合用药试验的过程记录。
+## Trajectory of one simulated combination trial: cohort process table, dose
+## escalation of each agent (panel A), calendar time with delayed (TITE) vs
+## complete outcomes (panel B). Font sizes are fixed, so set --width/--height to
+## the journal column width to keep text legible after scaling.
 ##
-## 组合试验的剂量是二维的（药物 A 的剂量 + 药物 B 的剂量），过程记录不适合
-## 画成单药那样的剂量阶梯图，因此逐队列的过程用表格记录，图形只保留两张：
-##   - 表格：每个队列分配到的剂量组合、决策时间、该队列的毒性和疗效结局，
-##     输出 output/tables/ 下的 CSV、Markdown 与抬头说明三个文件；
-##   - 图 A：两个药物各自随队列入组的剂量阶梯；
-##   - 图 B：延迟结局（TITE）与等待完整结局两种运行方式的日历时间对比。
-##
-## 面向期刊投稿的几点约定：
-##   * 图形尺寸与字号独立：文字字号固定，用 --width/--height 按期刊栏宽出图，
-##     因此缩到目标栏宽后字号仍然可读；
-##   * PDF 走 cairo 设备（字体嵌入完整），PNG 默认 600 dpi；
-##   * 线条颜色取色盲友好的蓝／朱红，并同时用实线／虚线区分，黑白打印也能分辨；
-##   * 剂量单位用 μg 而不是 ug；
-##   * 图内的解释性文字尽量短，完整的图注（含随机种子、软件版本等可重复性
-##     信息）单独写到 caption 文件，便于直接放进论文。
-##
-## 用法：Rscript Comb-STEIN-Code/plot/plot_trial_trajectory.R [项目根目录]
+## Usage: Rscript Comb-STEIN-Code/plot/plot_trial_trajectory.R [project root]
 ##       [--scenario=C1] [--method=CombSTEIN-L] [--seed=2026]
 ##       [--width=10.5] [--height=5.2] [--dpi=600]
 ##       [--figure-dir=output/figures] [--table-dir=output/tables]
@@ -28,7 +15,7 @@ suppressPackageStartupMessages({
 
 args <- commandArgs(trailingOnly = TRUE)
 
-## 取出 --name=value 形式的选项，其余位置参数留给调用方。
+## Returns the --name=value option together with the remaining args.
 .pull.option <- function(args, name) {
   pattern <- paste0("^--", name, "=")
   hit <- grep(pattern, args, value = TRUE)
@@ -62,8 +49,8 @@ figure.opt <- option.value(args, "figure-dir", "output/figures")
 args <- figure.opt$args
 table.opt <- option.value(args, "table-dir", "output/tables")
 args <- table.opt$args
-## 延迟结局的时间设置可覆盖，默认沿用 config.R 的 DEFAULT_DELAY_CONTROL，
-## 这样论文里的过程图能与主分析使用同一套评估窗与入组速度。
+## Delay settings may be overridden from the CLI; defaults follow DEFAULT_DELAY_CONTROL
+## so the figure uses the same windows and accrual rate as the main analysis.
 accrual.opt <- option.value(args, "accrual", NULL)
 args <- accrual.opt$args
 tox.opt <- option.value(args, "tox-window", NULL)
@@ -85,7 +72,7 @@ project_root <- if (length(args) >= 1) {
   normalizePath(getwd(), mustWork = TRUE)
 }
 
-## 相对路径按项目根目录展开，绝对路径原样使用。
+## Relative paths expand against the project root; absolute paths are kept as-is.
 resolve.dir <- function(value) {
   if (grepl("^(/|[A-Za-z]:)", value)) value else file.path(project_root, value)
 }
@@ -94,7 +81,7 @@ table_dir <- resolve.dir(table.opt$value)
 dir.create(figure_dir, showWarnings = FALSE, recursive = TRUE)
 dir.create(table_dir, showWarnings = FALSE, recursive = TRUE)
 
-## 加载模拟代码。模块顺序与 main.R 保持一致。
+## Module order matches main.R.
 code_dir <- file.path(project_root, "Comb-STEIN-Code")
 for (module in c(
   "config.R", "time_to_event.R", "isotonic_estimators.R", "dose_rules.R",
@@ -105,7 +92,6 @@ for (module in c(
 
 seed <- if (is.null(seed.opt$value)) DEFAULT_SEED else as.integer(seed.opt$value)
 
-## 用命令行覆盖（若给出）组装本次模拟使用的延迟设置。
 delay.control <- DEFAULT_DELAY_CONTROL
 if (!is.null(accrual.opt$value)) delay.control$accrual <- as.numeric(accrual.opt$value)
 if (!is.null(tox.opt$value)) delay.control$tox_window <- as.numeric(tox.opt$value)
@@ -113,23 +99,21 @@ if (!is.null(eff.opt$value)) delay.control$eff_window <- as.numeric(eff.opt$valu
 if (!is.null(susp.opt$value)) delay.control$suspension <- as.numeric(susp.opt$value)
 days_per_month <- 30.4375
 
-## R 在中文 Windows 上通常运行在 C 语言环境，此时直接用 writeLines/write.csv
-## 写非 ASCII 字符会被转义或丢失（μg 会写成 <U+03BC>g）。这里统一用二进制
-## 连接按 UTF-8 字节写出，保证表格与图注文件里的单位正确。
+## R on Chinese Windows runs in the C locale, where writeLines escapes non-ASCII
+## (μg becomes <U+03BC>g); write UTF-8 bytes through a binary connection instead.
 micro.sign <- intToUtf8(0x3bc)
 write.utf8 <- function(lines, path) {
   con <- file(path, open = "wb")
   on.exit(close(con))
   writeLines(enc2utf8(lines), con, useBytes = TRUE)
 }
-## write.csv 会把 UTF-8 字符串翻译成当前本地编码（这里是 C / ASCII），μ 同样
-## 会变成转义串，因此 CSV 也逐行拼好再按字节写出。
+## write.csv translates to the current locale, so CSV is assembled by hand too.
 csv.field <- function(x) {
   x <- as.character(x)
   ifelse(grepl('["\r\n]', x), paste0('"', gsub('"', '""', x), '"'), x)
 }
 to.csv.lines <- function(data) {
-  ## 先整体转成字符矩阵：直接对 data.frame 用 apply() 会对数值列做对齐补空格。
+  ## Cast to a character matrix first: apply() on a data.frame pads numeric columns.
   chars <- as.matrix(data.frame(
     lapply(data, as.character),
     stringsAsFactors = FALSE, check.names = FALSE
@@ -140,21 +124,18 @@ to.csv.lines <- function(data) {
   )
 }
 
-## 各真实案例情景的剂量档位标签，与 Comb-STEIN-Code/scenarios_case_study.R 的网格一一
-## 对应。这里的文字只用于作图与制表，不参与模拟。
-## 注意（2026-09-22 转置）：第一、第二案例的网格已把两个药物对调，
-## 药物 A 现在是两档的药物（GM-CSF、fruquintinib），药物 B 是三档的药物
-## （GP2、IDOV-SAFE）。这里的顺序必须与 Comb-STEIN-Code/scenarios_case_study.R 一致。
+## Dose-level labels for the case-study scenarios, one entry per grid in
+## Comb-STEIN-Code/scenarios_case_study.R; for plotting and tables only.
+## After the 2026-09-22 transpose the agents are swapped: drug A is the two-level
+## agent, drug B the three-level one. Order must match scenarios_case_study.R.
 dose.labels <- list(
-  ## 第一案例（GM-CSF × GP2，2×3）：药物 A = GM-CSF 两档，药物 B = GP2 三档。
   C1 = list(drugA = "GM-CSF", a = c(125, 250), a.unit = paste0(micro.sign, "g"),
             drugB = "GP2", b = c(100, 500, 1000), b.unit = paste0(micro.sign, "g")),
   C2 = list(drugA = "GM-CSF", a = c(125, 250), a.unit = paste0(micro.sign, "g"),
             drugB = "GP2", b = c(100, 500, 1000), b.unit = paste0(micro.sign, "g")),
-  ## 第二案例（fruquintinib × IDOV-SAFE，2×3）：药物 A = fruquintinib 两档，
-  ## 药物 B = IDOV-SAFE 三个档（1e9、3e9、1e10 PFU）。作图时只能有一个连续
-  ## 刻度，因此刻度值取 1 / 3 / 10，同时用 b.text 给出完整的字符串标签，
-  ## 表格与图注里的剂量写法就不会出现 1e+09 这种科学计数法。
+  ## IDOV-SAFE levels are 1e9 / 3e9 / 1e10 PFU. A plot axis needs one continuous
+  ## scale, so ticks use 1 / 3 / 10 and b.text carries the full labels, keeping
+  ## 1e+09-style notation out of tables and captions.
   C3 = list(drugA = "Fruquintinib", a = c(3, 5), a.unit = "mg",
             drugB = "IDOV-SAFE", b = c(1, 3, 10),
             b.unit = paste0("\u00d710", "\u2079 PFU"),
@@ -167,18 +148,17 @@ dose.labels <- list(
             b.text = c("IDOV-SAFE 1\u00d710\u2079 PFU",
                        "IDOV-SAFE 3\u00d710\u2079 PFU",
                        "IDOV-SAFE 1\u00d710\u00b9\u2070 PFU")),
-  ## 第三案例（ODI-2001 × ipilimumab，3×3）本身对称，转置后不变。
+  ## The 3x3 ODI-2001 x ipilimumab grid is symmetric, so the transpose leaves it unchanged.
   C5 = list(drugA = "ODI-2001", a = c(1, 2, 4), a.unit = "mg",
             drugB = "Ipilimumab", b = c(2.5, 5, 10), b.unit = "mg"),
   C6 = list(drugA = "ODI-2001", a = c(1, 2, 4), a.unit = "mg",
             drugB = "Ipilimumab", b = c(2.5, 5, 10), b.unit = "mg")
 )
 if (!scenario %in% names(dose.labels)) {
-  stop(sprintf("情景 %s 缺少剂量档位标签，请在 dose.labels 中补充", scenario))
+  stop(sprintf("Scenario %s has no dose-level labels; add them to dose.labels", scenario))
 }
 doses <- dose.labels[[scenario]]
 
-## 用固定的随机种子分别模拟一次延迟结局试验和一次完整结局试验。
 truth <- build.case.study.pTpE(scenario)
 set.seed(seed)
 tite.trial <- simulate.trial.comb.stein(
@@ -191,19 +171,18 @@ complete.trial <- simulate.trial.comb.stein(
   delay.control = delay.control, trace = TRUE
 )
 
-## 真实最优生物学剂量组合（OBDC）由设计效用函数算出，不在情景里写死。
+## True OBDC comes from the design utility function, not hard-coded in the scenario.
 obdc <- get.true.obdc(truth$pT, truth$pE)
 
 dose.text <- function(dose, drug, values, unit, texts = NULL) {
-  ## texts 给出该轴每一档的完整写法（用于 PFU 这类不便于用连续刻度表示的
-  ## 剂量）；没有给出时按“药物名 + 数值 + 单位”拼接。
+  ## texts gives the full spelling of each level (needed for PFU); otherwise
+  ## "drug + value + unit" is pasted together.
   if (!is.null(texts)) return(texts[dose])
   sprintf("%s %g %s", drug, values[dose], unit)
 }
 
-## ---------------------------------------------------------------------------
-## 逐队列的过程表。
-## 每位患者一行（来自 TITE 轨迹），先按队列汇总成每个队列的结局计数。
+## Per-cohort process table
+## One row per cohort, aggregated from the per-patient TITE trace.
 trace <- tite.trial$trace
 process <- do.call(rbind, lapply(split(trace, trace$cohort), function(chunk) {
   data.frame(
@@ -229,7 +208,7 @@ process <- do.call(rbind, lapply(split(trace, trace$cohort), function(chunk) {
 process <- process[order(process$cohort), ]
 process$no_dlt <- process$n - process$dlt - process$pending_dlt
 process$no_benefit <- process$n - process$benefit - process$pending_eff
-## 天数是时间到事件模拟里的连续值，表里保留一位小数即可。
+## Days are continuous in the time-to-event simulation; one decimal suffices.
 process$enroll_start <- round(process$enroll_start, 1)
 process$enroll_end <- round(process$enroll_end, 1)
 process$decision_day <- round(process$decision_day, 1)
@@ -243,7 +222,7 @@ process <- process[, c(
 )]
 rownames(process) <- NULL
 
-## 试验层面的汇总信息，写在表格文件抬头。
+## Trial-level summary, written as the table header.
 tite.months <- tite.trial$duration / days_per_month
 complete.months <- complete.trial$duration / days_per_month
 saved.months <- complete.months - tite.months
@@ -293,7 +272,6 @@ write.utf8(
   file.path(table_dir, paste0(file.stem, ".csv"))
 )
 
-## Markdown 版本：便于直接粘进论文或文档。
 write.utf8(
   c(
     sprintf("### %s - %s (seed %d)", scenario, method, seed),
@@ -324,8 +302,8 @@ write.utf8(
   file.path(table_dir, paste0(file.stem, ".md"))
 )
 
-## ---------------------------------------------------------------------------
-## 统一的期刊用主题：白底、细边框、极浅网格，字号固定不随图幅缩放。
+## Shared journal theme
+## Font sizes are fixed and do not scale with the figure dimensions.
 journal.theme <- theme_bw(base_size = 12) +
   theme(
     panel.grid.major.x = element_blank(),
@@ -342,14 +320,12 @@ journal.theme <- theme_bw(base_size = 12) +
     plot.margin = margin(5, 8, 5, 5)
   )
 
-## ---------------------------------------------------------------------------
-## 面板 A：两个药物各自随队列入组的剂量阶梯。
-## 两个药物共用横轴但剂量量纲不同，因此拆成上下两张子图，各自把纵轴刻度
-## 落在该药物真实的剂量档位上。
+## Panel A: dose escalation of each agent
+## Both agents share the cohort axis but have different dose scales, so they are
+## split into two stacked subplots, each with ticks at its own real dose levels.
 assignments <- process[, c("cohort", "dose_a_level", "dose_b_level")]
 cohort.max <- max(assignments$cohort)
-## 两个药物的单位不同（例如 IDOV-SAFE 用 ×10⁹ PFU、fruquintinib 用 mg），
-## 因此单位必须随各自的轨道传入，不能共用 doses$a.unit。
+## Units differ between agents (e.g. x10^9 PFU vs mg), so each track carries its own.
 track.list <- list(
   list(
     drug = doses$drugA,
@@ -367,7 +343,7 @@ track.list <- list(
 
 build.track <- function(track, show.x) {
   frame <- data.frame(cohort = assignments$cohort, dose = track$dose)
-  ## 只在剂量发生变化（或首次出现）的队列上标注具体剂量，避免同一档位重复标。
+  ## Label only cohorts where the dose changes (plus the first), to avoid repeats.
   frame$change <- c(TRUE, frame$dose[-1] != frame$dose[-nrow(frame)])
   pad <- 0.14 * diff(range(track$breaks))
   plot <- ggplot(frame, aes(x = cohort, y = dose)) +
@@ -404,9 +380,9 @@ track.b <- build.track(track.list[[2]], show.x = TRUE)
 panel.a <- track.a / track.b +
   plot_layout(heights = c(1, 1), axes = "collect_x")
 
-## ---------------------------------------------------------------------------
-## 面板 B：两种运行方式的日历时间对比。
-## 颜色取色盲友好的蓝／朱红，同时用实线／虚线区分，黑白打印同样可辨。
+## Panel B: calendar time of the two run modes
+## Colour-blind blue/vermilion plus solid/dashed linetypes, so the two modes stay
+## distinguishable in black-and-white printing.
 timeline <- rbind(
   data.frame(
     mode = "Delayed outcomes (TITE)",
@@ -494,9 +470,9 @@ ggsave(
   figure, width = figure.width, height = figure.height, dpi = figure.dpi
 )
 
-## ---------------------------------------------------------------------------
-## 图注：期刊要求图片本身不承载解释性文字，完整说明放在图注里，并写明
-## 可重复性信息（种子、软件版本、模拟设置）。
+## Figure caption
+## The figure itself carries no explanatory text; the caption holds the full
+## description plus reproducibility details (seed, R version, simulation settings).
 caption <- c(
   sprintf(
     "Figure.  Process of a single simulated combination trial under the %s design, scenario %s (%s, %s).",
@@ -530,11 +506,11 @@ caption <- c(
 )
 write.utf8(caption, file.path(table_dir, paste0(file.stem, "_caption.txt")))
 
-## 控制台在 C 语言环境下会把 μg 显示成转义串，因此打印时换成 ASCII 写法。
+## The C-locale console escapes μg, so print an ASCII spelling instead.
 cat(gsub(micro.sign, "u", header, fixed = TRUE), sep = "\n")
-cat("\n队列过程表已保存到：\n")
+cat("\nCohort-by-cohort table saved to:\n")
 cat(" ", file.path(table_dir, paste0(file.stem, ".csv")), "\n")
 cat(" ", file.path(table_dir, paste0(file.stem, ".md")), "\n")
-cat("图注已保存到：\n")
+cat("Figure caption saved to:\n")
 cat(" ", file.path(table_dir, paste0(file.stem, "_caption.txt")), "\n")
-cat("图已保存到", file.path(figure_dir, paste0(figure.file, ".pdf")), "\n")
+cat("Figure saved to", file.path(figure_dir, paste0(figure.file, ".pdf")), "\n")
